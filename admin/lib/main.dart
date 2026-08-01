@@ -4,10 +4,41 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:jinsun_core/jinsun_core.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'export.dart';
 import 'hardware_sim.dart';
 import 'logo.dart';
+
+/// 撥號：把電話清成純數字/加號後開 tel:。空號或失敗給提示，不靜默。
+Future<void> dialPhone(BuildContext context, String? phone) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final p = (phone ?? '').replaceAll(RegExp(r'[^0-9+]'), '');
+  if (p.isEmpty) {
+    messenger.showSnackBar(const SnackBar(content: Text('沒有可撥打的電話')));
+    return;
+  }
+  final ok = await launchUrl(Uri(scheme: 'tel', path: p));
+  if (!ok) {
+    messenger.showSnackBar(const SnackBar(content: Text('此裝置無法直接撥號')));
+  }
+}
+
+/// 地址 → 開 Google Maps 導航（新分頁/外部 App）。
+Future<void> openMaps(BuildContext context, String address) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final a = address.trim();
+  if (a.isEmpty) {
+    messenger.showSnackBar(const SnackBar(content: Text('這位長輩尚未填地址')));
+    return;
+  }
+  final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(a)}');
+  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!ok) {
+    messenger.showSnackBar(const SnackBar(content: Text('無法開啟地圖')));
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -378,11 +409,20 @@ class _AdminHomePageState extends State<AdminHomePage> {
     final tasks =
         backend.currentTasks.where((t) => inRange(t.createdAt)).toList();
     try {
-      buildExportWorkbook(
+      final bytes = buildExportWorkbook(
         elders: backend.currentElders,
         events: events,
         tasks: tasks,
       ).save(fileName: 'jinsun_radio_report_$stamp.xlsx');
+      // save() 回 null＝編碼失敗、沒有實際下載；別再報「已下載」害社工以為檔案在手。
+      if (bytes == null) {
+        messenger.showSnackBar(
+          const SnackBar(
+              backgroundColor: Color(0xFFC62828),
+              content: Text('匯出失敗：檔案產生失敗，請重試')),
+        );
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
             content: Text(
@@ -533,8 +573,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
       stream: backend.elders,
       initialData: backend.currentElders,
       builder: (context, _) {
+        // 鈴鐺紅點只算「我看得到」的長輩：開了「只看我的長輩」就別再把全系統其他社工
+        // 的緊急數灌進來，否則社工追一個不屬於自己、清單裡也找不到的數字。
         final emergency = backend.currentElders
-            .where((e) => e.severity == Severity.emergency)
+            .where((e) => _visible(e) && e.severity == Severity.emergency)
             .length;
         final title = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -694,10 +736,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1480),
+        // 拉寬版心、收窄留白，讓寬螢幕一頁看到更多派遣卡與地圖。
+        constraints: const BoxConstraints(maxWidth: 1760),
         child: ListView(
           controller: _scroll,
-          padding: const EdgeInsets.fromLTRB(20, 6, 20, 28),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
           children: [
             // 派遣監控：每位長輩一張狀態卡（新事件自動置頂、即時推送）。
             KeyedSubtree(
@@ -710,7 +753,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 14),
             // 即時事件：左側事件列表，右側選取後直接展開完整 Timeline（不跳 Modal）。
             KeyedSubtree(
               key: _kEvents,
@@ -722,28 +765,44 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            KeyedSubtree(
-              key: _kMap,
-              child: Column(
+            const SizedBox(height: 14),
+            // 寬螢幕：服務地圖與社工班表並排，縮短捲動、提高每頁資訊量；窄螢幕維持上下堆疊。
+            LayoutBuilder(builder: (context, c) {
+              final map = KeyedSubtree(
+                key: _kMap,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const _SectionTitle('服務地圖（長輩位置與即時狀態）'),
+                    _ElderMap(backend: backend, elderFilter: _visible),
+                  ],
+                ),
+              );
+              final workers = KeyedSubtree(
+                key: _kWorkers,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const _SectionTitle('社工名單與班表'),
+                    _WorkerTable(backend: backend),
+                  ],
+                ),
+              );
+              if (c.maxWidth >= 1100) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: map),
+                    const SizedBox(width: 16),
+                    Expanded(child: workers),
+                  ],
+                );
+              }
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _SectionTitle('服務地圖（長輩位置與即時狀態）'),
-                  _ElderMap(backend: backend, elderFilter: _visible),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            KeyedSubtree(
-              key: _kWorkers,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _SectionTitle('社工名單與班表'),
-                  _WorkerTable(backend: backend),
-                ],
-              ),
-            ),
+                children: [map, const SizedBox(height: 14), workers],
+              );
+            }),
           ],
         ),
       ),
@@ -926,11 +985,17 @@ class _ElderMap extends StatelessWidget {
         final elders = elderFilter == null
             ? all
             : all.where(elderFilter!).toList();
+        // 尚未地理編碼的長輩 lat/lng 預設 (0,0)，會被釘到地圖外（幾內亞灣）→ 等於從服務地圖
+        // 消失。過濾掉，改用角落提示「N 位未定位」，社工才知道還有人沒對到地址。
+        final located =
+            elders.where((e) => !(e.lat == 0 && e.lng == 0)).toList();
+        final unlocated = elders.length - located.length;
         return Card(
           clipBehavior: Clip.antiAlias,
           child: SizedBox(
             height: 360,
-            child: FlutterMap(
+            child: Stack(children: [
+            FlutterMap(
               options: const MapOptions(
                 initialCenter: LatLng(25.042, 121.535), // 台北市服務區
                 initialZoom: 12.5,
@@ -946,7 +1011,7 @@ class _ElderMap extends StatelessWidget {
                 ),
                 MarkerLayer(
                   markers: [
-                    for (final e in elders)
+                    for (final e in located)
                       Marker(
                         point: LatLng(e.lat, e.lng),
                         width: 96,
@@ -1009,6 +1074,26 @@ class _ElderMap extends StatelessWidget {
                     source: Text('OpenStreetMap contributors')),
               ],
             ),
+            if (unlocated > 0)
+              Positioned(
+                left: 10,
+                top: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _orange),
+                  ),
+                  child: Text('$unlocated 位未定位（地址待補）',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _ink)),
+                ),
+              ),
+            ]),
           ),
         );
       },
@@ -1061,7 +1146,17 @@ class _WorkerTable extends StatelessWidget {
                           fontWeight: FontWeight.bold),
                     )),
                     DataCell(Text('${backend.workerLoad(w.name)} 件')),
-                    DataCell(Text(maskPhone(w.phone))),
+                    DataCell(
+                      Text(maskPhone(w.phone),
+                          style: w.phone.trim().isEmpty
+                              ? null
+                              : const TextStyle(
+                                  color: Color(0xFF1B6FB8),
+                                  decoration: TextDecoration.underline)),
+                      onTap: w.phone.trim().isEmpty
+                          ? null
+                          : () => dialPhone(context, w.phone),
+                    ),
                   ]),
               ],
             ),
@@ -1430,18 +1525,20 @@ class _DispatchMonitorState extends State<_DispatchMonitor> {
         // 統計（一目瞭然）：緊急 / 注意 / 待接單，與下方清單同一份 items。
         var emerg = 0, attn = 0, pending = 0;
         for (final it in items) {
-          final t = it.task;
-          if (t == null) continue;
+          // 依 status() 的實際分級計數（含「有事件、還沒開單」的確認窗長輩），
+          // 不再只算有派遣單者——否則統計條與下方卡片的顏色會對不起來。
           final sev = it.status().$2;
           if (sev == Severity.emergency) {
             emerg++;
           } else if (sev == Severity.attention) {
             attn++;
           }
-          if (t.status == DispatchStatus.pending) pending++;
+          if (it.task?.status == DispatchStatus.pending) pending++;
         }
-        // 「需要處理」= 有進行中派遣單者（待接單／前往中／已到場／督導追蹤）。
-        final actionable = items.where((it) => it.task != null).toList();
+        // 「需要處理」= 有進行中派遣單，或雖未開單但長輩狀態非正常（跌倒確認窗／SOS 前一刻）。
+        final actionable = items
+            .where((it) => it.task != null || it.elder.severity != Severity.normal)
+            .toList();
 
         return LayoutBuilder(builder: (context, c) {
           final narrow = c.maxWidth < 720;
@@ -1585,7 +1682,7 @@ class _DispatchMonitorState extends State<_DispatchMonitor> {
                         t.status == DispatchStatus.arrived)
                       _cardAction('結案', Icons.check_circle_outline,
                           () => _resolve(t.id)),
-                    _cardAction('聯絡', Icons.call, () => _contact(it.elder, t)),
+                    ..._contactActions(it.elder, t),
                   ],
                 ),
               ],
@@ -1699,8 +1796,7 @@ class _DispatchMonitorState extends State<_DispatchMonitor> {
                           t.status == DispatchStatus.arrived)
                         _cardAction('結案', Icons.check_circle_outline,
                             () => _resolve(t.id)),
-                      _cardAction(
-                          '聯絡', Icons.call, () => _contact(it.elder, t)),
+                      ..._contactActions(it.elder, t),
                     ],
                   ),
                 ],
@@ -1774,50 +1870,160 @@ class _DispatchMonitorState extends State<_DispatchMonitor> {
     }
   }
 
-  String _volPhone(String name) {
-    for (final v in backend.currentVolunteers) {
-      if (v.name == name) return v.phone;
-    }
-    return '';
+  /// 「聯絡」不再跳資訊彈窗，直接給兩個動作：
+  ///   聯絡長輩 → tel: 直撥家中電話（通話介面）
+  ///   聯絡家屬 → 進入派遣單訊息介面（社工↔家屬，家屬 App 同一條對話即時看到）
+  List<Widget> _contactActions(Elder elder, DispatchTask t) => [
+        _cardAction('聯絡長輩', Icons.call, () => dialPhone(context, elder.phone)),
+        _cardAction(
+            '聯絡家屬', Icons.chat_bubble_outline, () => _messageFamily(elder, t)),
+      ];
+
+  void _messageFamily(Elder elder, DispatchTask t) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => AdminFamilyChatPage(
+        backend: backend,
+        taskId: t.id,
+        elderName: maskName(elder.name),
+      ),
+    ));
+  }
+}
+
+/// 社工端「聯絡家屬」訊息介面：讀寫這張派遣單的對話（社工以 system 身分發話），
+/// 家屬在自己的 App 同一條對話即時看到。與家屬/志工的訊息共用 task_messages。
+class AdminFamilyChatPage extends StatefulWidget {
+  const AdminFamilyChatPage({
+    super.key,
+    required this.backend,
+    required this.taskId,
+    required this.elderName,
+  });
+
+  final BackendClient backend;
+  final String taskId;
+  final String elderName;
+
+  @override
+  State<AdminFamilyChatPage> createState() => _AdminFamilyChatPageState();
+}
+
+class _AdminFamilyChatPageState extends State<AdminFamilyChatPage> {
+  final _input = TextEditingController();
+  final _scroll = ScrollController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _input.dispose();
+    _scroll.dispose();
+    super.dispose();
   }
 
-  String _workerPhone(String name) {
-    for (final w in backend.currentWorkers) {
-      if (w.name == name) return w.phone;
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (text.isEmpty || _sending) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _sending = true);
+    _input.clear();
+    try {
+      await widget.backend.sendTaskMessage(widget.taskId,
+          from: ChatFromRole.system, text: text);
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(content: Text('送出失敗，請重試')));
     }
-    return '';
+    if (mounted) setState(() => _sending = false);
   }
 
-  /// 後台聯絡資訊：社工是內部人力，直接顯示可撥打的電話（長輩／志工／督導）。
-  void _contact(Elder elder, DispatchTask t) {
-    Widget row(String who, String? phone) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(
-            children: [
-              Expanded(child: Text(who)),
-              const SizedBox(width: 12),
-              Text((phone == null || phone.isEmpty) ? '未提供' : phone,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-            ],
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('聯絡 ${widget.elderName} 家屬')),
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder<List<TaskMessage>>(
+              stream: widget.backend.messages,
+              initialData: widget.backend.currentMessages,
+              builder: (context, snap) {
+                final msgs = (snap.data ?? const <TaskMessage>[])
+                    .where((m) => m.taskId == widget.taskId)
+                    .toList()
+                  ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+                if (msgs.isEmpty) {
+                  return const Center(
+                    child: Text('還沒有訊息，主動關心一下家屬吧',
+                        style: TextStyle(color: _muted)),
+                  );
+                }
+                return ListView.builder(
+                  controller: _scroll,
+                  padding: const EdgeInsets.all(14),
+                  itemCount: msgs.length,
+                  itemBuilder: (c, i) => _bubble(msgs[i]),
+                );
+              },
+            ),
           ),
-        );
-    showDialog<void>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('聯絡資訊'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            row('長輩 ${elder.name}', elder.phone),
-            if (t.assigneeName != null)
-              row('志工 ${t.assigneeName}', _volPhone(t.assigneeName!)),
-            if (t.workerName != null)
-              row('督導社工 ${t.workerName}', _workerPhone(t.workerName!)),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(c), child: const Text('關閉')),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _input,
+                      minLines: 1,
+                      maxLines: 4,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _send(),
+                      decoration: const InputDecoration(
+                          hintText: '輸入訊息給家屬…',
+                          border: OutlineInputBorder(),
+                          isDense: true),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                      onPressed: _sending ? null : _send,
+                      icon: const Icon(Icons.send)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bubble(TaskMessage m) {
+    final mine = m.fromRole == ChatFromRole.system; // 社工自己送的
+    final who = switch (m.fromRole) {
+      ChatFromRole.family => '家屬',
+      ChatFromRole.volunteer => '志工',
+      ChatFromRole.system => '社工',
+    };
+    final bg = mine ? const Color(0xFF1B8FD6) : Colors.white;
+    final fg = mine ? Colors.white : _ink;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment:
+            mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Text(who, style: const TextStyle(fontSize: 11, color: _muted)),
+          const SizedBox(height: 2),
+          Container(
+            constraints: const BoxConstraints(maxWidth: 420),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _line)),
+            child: Text(m.text,
+                style: TextStyle(color: fg, fontSize: 14, height: 1.35)),
+          ),
         ],
       ),
     );
@@ -1898,7 +2104,21 @@ class _MonitorItem {
         DispatchStatus.resolved => ('已完成', Severity.normal, null),
       };
     }
-    return ('已完成', Severity.normal, lastDone != null ? _hm(lastDone!) : '狀況穩定');
+    // 沒有派遣單 ≠ 一定沒事：疑似跌倒的 20 秒語音確認窗內只有 open 事件、還沒開單，
+    // 此時 elder.severity 已是 attention（甚至 SOS 前一刻的 emergency）。若一律回「已完成／
+    // 狀況穩定」綠卡，正在確認中的長輩會在「派遣監控」裡被漏看——這正是社工最不能錯過的一刻。
+    switch (elder.severity) {
+      case Severity.emergency:
+        return ('緊急・待處理', Severity.emergency, '收音機回報緊急，派遣單建立中');
+      case Severity.attention:
+        return ('狀況確認中', Severity.attention, 'AI 語音確認中／注意追蹤');
+      case Severity.normal:
+        return (
+          '已完成',
+          Severity.normal,
+          lastDone != null ? _hm(lastDone!) : '狀況穩定'
+        );
+    }
   }
 }
 
@@ -2094,7 +2314,7 @@ class _ElderDetailView extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(18),
           children: [
-            _profile(),
+            _profile(context),
             const SizedBox(height: 18),
             // 志工到場所見的照護資訊——後台點進長輩看到同一份（志工端所見即後台所見）。
             _CareChecklist(elder: elder),
@@ -2130,26 +2350,40 @@ class _ElderDetailView extends StatelessWidget {
     );
   }
 
-  Widget _profile() {
+  Widget _profile(BuildContext context) {
     final sev = elder.severity;
-    Widget row(IconData ic, String label, String value) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(ic, size: 16, color: _muted),
-              const SizedBox(width: 8),
-              SizedBox(
-                  width: 60,
-                  child: Text(label,
-                      style: const TextStyle(fontSize: 12.5, color: _muted))),
-              Expanded(
-                  child: Text(value,
-                      style: const TextStyle(
-                          fontSize: 13.5, fontWeight: FontWeight.w600))),
-            ],
-          ),
-        );
+    // onTap 有值 → 值顯示成可點連結（地址開地圖、電話直撥）。
+    Widget row(IconData ic, String label, String value, {VoidCallback? onTap}) {
+      final valueWidget = onTap == null
+          ? Text(value,
+              style:
+                  const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600))
+          : InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(4),
+              child: Text(value,
+                  style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1B6FB8),
+                      decoration: TextDecoration.underline)),
+            );
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(ic, size: 16, color: _muted),
+            const SizedBox(width: 8),
+            SizedBox(
+                width: 60,
+                child: Text(label,
+                    style: const TextStyle(fontSize: 12.5, color: _muted))),
+            Expanded(child: valueWidget),
+          ],
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2188,8 +2422,14 @@ class _ElderDetailView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          row(Icons.place_outlined, '地址', maskAddress(elder.address)),
-          row(Icons.phone_outlined, '電話', maskPhone(elder.phone)),
+          row(Icons.place_outlined, '地址', maskAddress(elder.address),
+              onTap: elder.address.trim().isEmpty
+                  ? null
+                  : () => openMaps(context, elder.address)),
+          row(Icons.phone_outlined, '電話', maskPhone(elder.phone),
+              onTap: (elder.phone == null || elder.phone!.trim().isEmpty)
+                  ? null
+                  : () => dialPhone(context, elder.phone)),
           row(Icons.record_voice_over_outlined, '語言',
               elder.preferredLang.label),
           if (elder.supervisorWorkerName != null)

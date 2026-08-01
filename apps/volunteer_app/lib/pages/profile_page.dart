@@ -45,10 +45,28 @@ class ProfilePage extends StatelessWidget {
                     ],
                   ),
                 ),
-                const StatusPill(
-                    label: '已認證',
-                    fg: JinsunColors.okText,
-                    bg: JinsunColors.okBg),
+                // 認證狀態要照真實證件算，不能寫死「已認證」——否則沒證的志工看到自己
+                // 是「已認證」，卻在緊急派遣被擋、跟證件頁自相矛盾。
+                StreamBuilder<List<Volunteer>>(
+                  stream: backend.volunteers,
+                  initialData: backend.currentVolunteers,
+                  builder: (context, snap) {
+                    final me = _find(snap.data);
+                    bool valid(CertKind k) =>
+                        me?.certificates.any((c) =>
+                            c.kind == k && c.status == CertStatus.valid) ??
+                        false;
+                    final certified = valid(CertKind.goodCitizen) &&
+                        valid(CertKind.insurance);
+                    return StatusPill(
+                      label: certified ? '已認證' : '待完成認證',
+                      fg: certified
+                          ? JinsunColors.okText
+                          : JinsunColors.warnText,
+                      bg: certified ? JinsunColors.okBg : JinsunColors.warnBg,
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -218,7 +236,8 @@ class ProfilePage extends StatelessWidget {
           if (hours.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('尚未設定可服務時段，設定後即可收到對應時段的派遣單。',
+              child: Text('尚未設定可服務時段。可服務時段由社工於報到時協助設定，'
+                  '設定後就會收到對應時段的派遣單。',
                   style: TextStyle(fontSize: 13, color: JinsunColors.muted)),
             )
           else ...[
@@ -283,6 +302,12 @@ class _NotificationSwitchesState extends State<_NotificationSwitches> {
           title: const Text('提示音'),
           value: _sound,
           onChanged: (v) => setState(() => _sound = v),
+        ),
+        const SizedBox(height: 8),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text('※ 目前設定僅在此裝置本次生效，雲端同步開發中。',
+              style: TextStyle(fontSize: 12, color: JinsunColors.muted)),
         ),
       ],
     );

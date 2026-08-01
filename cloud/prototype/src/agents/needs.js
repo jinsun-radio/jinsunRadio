@@ -41,24 +41,32 @@ function ruleItem(text) {
 export function createNeedsAgent(deps) {
   return {
     async handle({ elderKey, deviceSerial, elderId, text }) {
-      const out = await llm({
-        system: SYSTEM,
-        user: text,
-        json: true,
-        mock: () => {
-          const bought = extractItems(text);
-          if (bought.length) {
-            return { category: 'supply', items: bought, speak: `好，我幫您買${bought.join('、')}，通知志工去採買。` };
-          }
-          const item = ruleItem(text) || '生活協助';
-          return { category: 'care', items: [item], speak: `好，我幫您記下來「${item}」，並通知志工。` };
-        },
-      });
+      // 先用規則／樣式快速抽品項，**立刻建單＋廣播**（志工端 2 秒內亮單）——不把上單卡在 LLM 後面。
+      // 之前是先 await LLM 再 createSupply，正式站接 Bedrock 時整條上單延遲＝LLM 往返，達不到 2 秒。
+      const bought = extractItems(text);
+      const isSupply = bought.length > 0;
+      const items = isSupply ? bought : [ruleItem(text) || '生活協助'];
+      const category = isSupply ? 'supply' : 'care';
+      const fallbackSpeak = isSupply
+        ? `好，我幫您買${items.join('、')}，通知志工去採買。`
+        : `好，我幫您記下來「${items[0]}」，並通知志工。`;
 
-      const items = Array.isArray(out.items) && out.items.length ? out.items : [ruleItem(text) || '生活協助'];
-      const speak = out.speak || `好的，我幫您記下來，並通知志工過來協助。`;
+      await deps.createSupply({ elderKey, deviceSerial, elderId, items, transcript: text, category });
 
-      await deps.createSupply({ elderKey, deviceSerial, elderId, items, transcript: text, category: out.category });
+      // 回長輩的安撫話可再交 LLM 潤飾——此時派遣單已建好、廣播已發，這段延遲只影響「裝置播的話」，
+      // 不影響網頁上單時效。沒有 LLM（mock／離線）就用模板，一樣不卡。
+      let speak = fallbackSpeak;
+      try {
+        const out = await llm({
+          system: SYSTEM,
+          user: text,
+          json: true,
+          mock: () => ({ speak: fallbackSpeak }),
+        });
+        if (out && out.speak) speak = out.speak;
+      } catch (_) {
+        // LLM 失敗照用模板，長輩仍聽得到回覆
+      }
       return { reply: speak, action: { type: 'need_created', items } };
     },
   };

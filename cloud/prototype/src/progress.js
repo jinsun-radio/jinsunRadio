@@ -69,7 +69,9 @@ export function speakText(status, { name, eta, kind } = {}) {
     if (kind === 'supply') {
       return `${who}到您家門口了，等一下會把東西送進來，您安心休息就好。`;
     }
-    return `${who}到您家門口了，馬上就進來看您，您安心休息就好。`;
+    // 緊急（疑似跌倒/SOS）：先叫長輩「不要移動」——若剛跌倒，亂動可能加重傷勢，
+    // 讓志工到場先扶、先看，比長輩自己爬起來安全。
+    return `${who}已經到門口了！請先不要移動，馬上進來看您。`;
   }
   // ② 路上每 10 分鐘：只報還要多久，不加安撫贅句。
   if (status === 'enroute') {

@@ -204,7 +204,8 @@ class MockBackend extends BackendClient {
     final event = _addEvent(elderId, RadioEventType.fallSuspected,
         Severity.attention, RadioEventStatus.open);
     _setElderSeverity(elderId, Severity.attention);
-    _notify('${elder.name} 疑似跌倒，收音機語音確認中', Severity.attention);
+    _notify('${elder.name} 疑似跌倒，收音機語音確認中', Severity.attention,
+        elderId: elderId);
     _timers['confirm-${event.id}'] = Timer(escalateAfter, () {
       _timers.remove('confirm-${event.id}');
       _escalate(event.id);
@@ -217,7 +218,8 @@ class MockBackend extends BackendClient {
         elderId, RadioEventType.sos, Severity.emergency, RadioEventStatus.escalated);
     _setElderSeverity(elderId, Severity.emergency);
     final elder = _elderById(elderId);
-    _notify('${elder.name} 按下 SOS，已開立緊急派遣單', Severity.emergency);
+    _notify('${elder.name} 按下 SOS，已開立緊急派遣單', Severity.emergency,
+        elderId: elderId);
     _createTask(event, DispatchKind.emergency);
   }
 
@@ -227,7 +229,8 @@ class MockBackend extends BackendClient {
     final event = _addEvent(elderId, RadioEventType.supplyRequest,
         Severity.normal, RadioEventStatus.open,
         transcript: '我想買${items.join('跟')}');
-    _notify('${elder.name} 需要物資：${items.join('、')}', Severity.normal);
+    _notify('${elder.name} 需要物資：${items.join('、')}', Severity.normal,
+        elderId: elderId);
     _createTask(event, DispatchKind.supply, items: items);
   }
 
@@ -239,7 +242,8 @@ class MockBackend extends BackendClient {
     _updateEvent(event.copyWith(
         status: RadioEventStatus.confirmedOk, severity: Severity.normal));
     _setElderSeverity(elderId, Severity.normal);
-    _notify('${_elderById(elderId).name} 回應「我沒事」，事件解除', Severity.normal);
+    _notify('${_elderById(elderId).name} 回應「我沒事」，事件解除', Severity.normal,
+        elderId: elderId);
     // 🟡 注意軌：回應無恙不代表沒事——記一筆趨勢，累積到門檻就轉督導追蹤。
     _recordFallTrend(elderId, event);
   }
@@ -284,7 +288,8 @@ class MockBackend extends BackendClient {
     _notify(
         '${elder.name} 近期第 $trendCount 次疑似跌倒（均自行回應無恙），'
         '已為督導個管 $supervisor 開立追蹤訪視待辦（非緊急、不派志工）',
-        Severity.attention);
+        Severity.attention,
+        elderId: elderId);
   }
 
   @override
@@ -309,7 +314,8 @@ class MockBackend extends BackendClient {
       }
     }
     _updateTask(task.copyWith(assigneeName: volunteerName, etaMinutes: eta));
-    _notify('社工已指派 $volunteerName 前往 ${elder.name}', Severity.attention);
+    _notify('社工已指派 $volunteerName 前往 ${elder.name}', Severity.attention,
+        elderId: elder.id);
   }
 
   @override
@@ -319,7 +325,7 @@ class MockBackend extends BackendClient {
     _updateTask(task.copyWith(
         status: DispatchStatus.arrived, arrivedAt: DateTime.now()));
     _notify('${task.assigneeName} 已到場，確認 ${_elderById(task.elderId).name} 狀況中',
-        Severity.attention);
+        Severity.attention, elderId: task.elderId);
   }
 
   @override
@@ -522,7 +528,8 @@ class MockBackend extends BackendClient {
       _notify(
           '${_elderById(task.elderId).name} 的督導追蹤已完成'
           '（個管 ${task.workerName}${cleanOutcome != null ? '：$cleanOutcome' : ''}）',
-          Severity.normal);
+          Severity.normal,
+          elderId: task.elderId);
       return;
     }
     _updateTask(task.copyWith(
@@ -542,7 +549,8 @@ class MockBackend extends BackendClient {
         task.kind == DispatchKind.emergency
             ? '$name 已安全，任務完成（時間銀行 +$mins 分）'
             : '$name 物資已送達（時間銀行 +$mins 分）',
-        Severity.normal);
+        Severity.normal,
+        elderId: task.elderId);
   }
 
   @override
@@ -561,7 +569,7 @@ class MockBackend extends BackendClient {
     _updateTask(task.copyWith(
         offeredUntil: DateTime.now(), clearAssignee: true));
     _notify('已請求支援，開放全體志工接單 ${_elderById(task.elderId).name}',
-        Severity.attention);
+        Severity.attention, elderId: task.elderId);
   }
 
   @override
@@ -576,7 +584,7 @@ class MockBackend extends BackendClient {
         _eventById(task.eventId).copyWith(status: RadioEventStatus.closed));
     _setElderSeverity(task.elderId, Severity.normal);
     _notify('${_elderById(task.elderId).name} 的物資需求由家屬自行處理，已取消派工',
-        Severity.normal);
+        Severity.normal, elderId: task.elderId);
   }
 
   @override
@@ -765,7 +773,7 @@ class MockBackend extends BackendClient {
     _setElderSeverity(event.elderId, Severity.emergency);
     final elder = _elderById(event.elderId);
     _notify('緊急：${elder.name} 疑似跌倒且 ${escalateAfter.inSeconds} 秒未回應，已派遣志工',
-        Severity.emergency);
+        Severity.emergency, elderId: event.elderId);
     _createTask(event, DispatchKind.emergency);
   }
 
@@ -812,13 +820,15 @@ class MockBackend extends BackendClient {
     _notify(
         '已指派社工 ${worker.name}（${worker.onDuty(now) ? '值班中' : '非值班支援'}，'
         '目前 ${workerLoad(worker.name)} 件）督導本單',
-        Severity.attention);
+        Severity.attention,
+        elderId: event.elderId);
     if (picked != null) {
       final eta = estimateEtaMinutes(picked.lat, picked.lng, elder.lat, elder.lng);
       _notify(
           '已就近派單給 ${picked.name}（約 $eta 分鐘可到，手上 ${_volunteerLoad(picked.name) - 1} 件），'
           '${emergencyDispatchWindow.inMinutes} 分鐘內未確認前往將自動改派更近的人',
-          Severity.attention);
+          Severity.attention,
+          elderId: event.elderId);
       // 3 分鐘未接單／未動身 → 自動改派下一位更近者並廣播請支援。
       _scheduleReassign(task.id);
     }
@@ -854,14 +864,15 @@ class MockBackend extends BackendClient {
       _notify(
           '🚨 請支援 ${elder.name}（${elder.address}）：'
           '原志工逾時未動身，已改派就近的 ${next.name}（約 $eta 分鐘可到），其他志工也可接單補位',
-          Severity.emergency);
+          Severity.emergency,
+          elderId: task.elderId);
       _scheduleReassign(taskId); // 新的一輪計時
     } else {
       // 沒有其他人選 → 開放全體搶單補位。
       _updateTask(task.copyWith(
           clearAssignee: true, offeredUntil: DateTime.now()));
       _notify('🚨 請支援 ${elder.name}（${elder.address}）：目前無就近志工，已開放全體接單',
-          Severity.emergency);
+          Severity.emergency, elderId: task.elderId);
     }
   }
 
@@ -906,7 +917,7 @@ class MockBackend extends BackendClient {
         acceptedAt: DateTime.now()));
     _notify(
         '$assignee 已接單，預計 $etaMinutes 分鐘到達 ${_elderById(task.elderId).name} 家',
-        Severity.attention);
+        Severity.attention, elderId: task.elderId);
   }
 
   RadioEvent _addEvent(String elderId, RadioEventType type, Severity severity,
@@ -945,12 +956,15 @@ class MockBackend extends BackendClient {
     _eldersCtrl.add(currentElders);
   }
 
-  void _notify(String message, Severity severity) {
+  void _notify(String message, Severity severity, {String? elderId}) {
     _notifCtrl.add(AppNotification(
       id: _nextId('notif'),
       message: message,
       severity: severity,
       at: DateTime.now(),
+      // 帶上長輩 id，家屬 App 才能只留自己綁定長輩的通知（與 SupabaseBackend 一致）；
+      // null＝不限對象（系統級）。
+      elderId: elderId,
     ));
   }
 

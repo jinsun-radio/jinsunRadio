@@ -66,6 +66,9 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
   final FlutterTts _tts = FlutterTts();
   final AudioPlayer _player = AudioPlayer();
   final http.Client _http = http.Client();
+  // 下行指令長輪詢用獨立 client（長連線 35 秒，不佔用 _http 的一般請求）。
+  final http.Client _cmdHttp = http.Client();
+  bool _cmdPolling = false;
 
   int _speakSeq = 0; // 語音序號：只讓「最新一次」發聲，避免兩個聲音一起講
   bool _cloudTtsAvailable = true; // 雲端 TTS 打不通就整個 session 改用瀏覽器語音
@@ -76,7 +79,9 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
   List<Elder> _elders = const [];
   String? _elderId; // 目前這台收音機對應的長輩
   _Phase _phase = _Phase.idle;
-  String _bubble = '有事就按住下面的大按鈕，跟我說一聲。';
+  // 日常待機文案：長輩端沒有 UI，唯一互動就是那顆大語音按鈕，所以待機提示直接邀請開口。
+  static const _idleBubble = '需要什麼都可以跟我們說。';
+  String _bubble = _idleBubble;
   DispatchTask? _activeTask; // 進行中派遣（志工前往中／已到場）
   bool _tasksSeeded = false;
   String? _lastSpokenTaskKey;
@@ -104,6 +109,37 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
       });
     });
     _taskSub = _backend.tasks.listen(_onTasks);
+    _startCommandPolling();
+  }
+
+  /// 下行指令長輪詢：跟雲端 server 要「要念給長輩的話」（家屬按立即提醒、急救安撫、
+  /// 進度播報都走這條）。真收音機走 MQTT；長輩網頁沒有 MQTT，就靠 GET /commands 拉。
+  /// 收到 type:'speak' 就念出來——與硬體行為一致。
+  Future<void> _startCommandPolling() async {
+    if (_cmdPolling) return;
+    _cmdPolling = true;
+    while (mounted) {
+      final serial = _elder?.deviceSerial;
+      if (serial == null || serial.isEmpty) {
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+        continue;
+      }
+      try {
+        final res = await _cmdHttp
+            .get(Uri.parse('$_serverBase/commands?device_serial=$serial'))
+            .timeout(const Duration(seconds: 35));
+        final j = jsonDecode(res.body);
+        final cmds =
+            (j is Map && j['commands'] is List) ? j['commands'] as List : const [];
+        for (final c in cmds) {
+          if (c is Map && c['type'] == 'speak' && c['text'] is String) {
+            await _speak(c['text'] as String);
+          }
+        }
+      } catch (_) {
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
+      }
+    }
   }
 
   /// AWS 環境的裝置登入。Supabase 環境不需要（維持原本免登入直讀），直接跳過。
@@ -144,6 +180,7 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
     _tts.stop();
     _player.dispose();
     _http.close();
+    _cmdHttp.close();
     _backend.dispose();
     _auth.dispose();
     super.dispose();
@@ -226,6 +263,14 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
           t.status == DispatchStatus.arrived) {
         active = t; // 取最後一筆進行中
       }
+    }
+    // 工單結束（原本有進行中派遣、現在沒有了）→ 不要停在「志工到了」，
+    // 自動恢復日常待機畫面並念一句收尾，回到「需要什麼都可以跟我們說」。
+    final justEnded = _activeTask != null && active == null && _tasksSeeded;
+    if (justEnded) {
+      _bubble = _idleBubble;
+      _lastSpokenTaskKey = null;
+      _speak('都處理好了，您好好休息。需要什麼都可以跟我們說。');
     }
     if (mounted) setState(() => _activeTask = active);
 
@@ -363,9 +408,14 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
             children: [
               _header(elder),
               const SizedBox(height: 12),
-              Expanded(child: _center(elder)),
-              const SizedBox(height: 12),
-              _bigButton(),
+              // 有進行中派遣：上方放大字狀態卡（正在過來／到了），下方仍保留語音按鈕可求助。
+              // 日常待機：整個中央只留一顆大型圓形語音按鈕（長輩零學習成本）。
+              if (_activeTask != null) ...[
+                Expanded(child: _center(elder)),
+                const SizedBox(height: 12),
+                _bigButton(),
+              ] else
+                Expanded(child: _idleCenter(elder)),
             ],
           ),
         ),
@@ -483,51 +533,100 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
     );
   }
 
+  /// 日常待機中央：一句招呼 + 一顆大型圓形語音按鈕（唯一互動）。
+  Widget _idleCenter(Elder? elder) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          _phase == _Phase.recording
+              ? Icons.mic
+              : (_phase == _Phase.thinking
+                  ? Icons.hourglass_top
+                  : Icons.favorite),
+          size: 44,
+          color: JinsunColors.orangeDeep,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          elder == null ? '您好' : '${elder.name}，您好',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+              fontSize: 28, fontWeight: FontWeight.w900, color: JinsunColors.ink),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _bubble,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+              fontSize: 19, height: 1.5, color: JinsunColors.muted),
+        ),
+        const SizedBox(height: 28),
+        Expanded(child: Center(child: _bigButton())),
+      ],
+    );
+  }
+
+  /// 大型圓形「按住說話」按鈕：整顆正圓、四周留白（padding），是長輩端唯一的互動控制。
   Widget _bigButton() {
     final recording = _phase == _Phase.recording;
     final thinking = _phase == _Phase.thinking;
     final label = recording ? '放開就送出' : (thinking ? '處理中…' : '按住說話');
-    return GestureDetector(
-      onTapDown: (_) => _startRecording(),
-      onTapUp: (_) => _stopAndSend(),
-      onTapCancel: () => _stopAndSend(),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        height: 168,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: recording
-                ? const [Color(0xFFD64545), Color(0xFFB4322E)]
-                : const [Color(0xFFF97316), Color(0xFFB85708)],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: (recording
-                      ? const Color(0xFFB4322E)
-                      : const Color(0xFFB85708))
-                  .withValues(alpha: 0.45),
-              blurRadius: 22,
-              offset: const Offset(0, 10),
+    return LayoutBuilder(
+      builder: (context, c) {
+        // 直徑取可用寬高較小值，並放大到最多 320；四周再留白讓它是「完整圓形」。
+        final avail = [
+          if (c.maxWidth.isFinite) c.maxWidth,
+          if (c.maxHeight.isFinite) c.maxHeight,
+        ];
+        final base = avail.isEmpty ? 300.0 : avail.reduce((a, b) => a < b ? a : b);
+        final diameter = (base - 24).clamp(200.0, 320.0);
+        return GestureDetector(
+          onTapDown: (_) => _startRecording(),
+          onTapUp: (_) => _stopAndSend(),
+          onTapCancel: () => _stopAndSend(),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: diameter,
+            height: diameter,
+            padding: const EdgeInsets.all(28), // 內距讓圖示文字不貼邊，整體是飽滿的圓
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: recording
+                    ? const [Color(0xFFD64545), Color(0xFFB4322E)]
+                    : const [Color(0xFFF97316), Color(0xFFB85708)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (recording
+                          ? const Color(0xFFB4322E)
+                          : const Color(0xFFB85708))
+                      .withValues(alpha: 0.45),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(recording ? Icons.mic : Icons.mic_none,
-                size: 64, color: Colors.white),
-            const SizedBox(height: 8),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white)),
-          ],
-        ),
-      ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(recording ? Icons.mic : Icons.mic_none,
+                    size: 92, color: Colors.white),
+                const SizedBox(height: 10),
+                Text(label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white)),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

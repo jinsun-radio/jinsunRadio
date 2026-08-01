@@ -164,6 +164,19 @@ class SupabaseBackend extends BackendClient {
                 _appendMessage(Map<String, dynamic>.from(payload));
               } catch (_) {}
             })
+        // 雲端派遣層寫完事件／派遣單後，會用這個 'sync' 廣播（次秒級）通知三端「哪幾張表變了」，
+        // 收到就立刻重抓，不必等 1~3 秒的 Postgres Changes → 收音機一觸發、網頁 2 秒內亮任務單。
+        .onBroadcast(
+            event: 'sync',
+            callback: (payload) {
+              try {
+                final tables = (payload['tables'] as List?)?.cast<String>() ??
+                    const ['radio_events', 'dispatch_tasks', 'elders'];
+                for (final t in tables) {
+                  _onChange(t);
+                }
+              } catch (_) {}
+            })
         .subscribe();
     _channels.add(_signalCh!);
   }
@@ -511,8 +524,17 @@ class SupabaseBackend extends BackendClient {
   }
 
   Future<void> _escalate(String eventId, String elderId) async {
-    await _sb.from('radio_events').update(
-        {'status': 'escalated', 'severity': 'emergency'}).eq('id', eventId);
+    // 升級前確認事件仍是 open：長輩可能已在別的端（收音機→server、或另一支 App）
+    // 回應「我沒事」→ confirmed_ok。此時本端殘留的 20 秒計時器若照升，會把已解除的
+    // 事件蓋回 escalated、開一張假的緊急派遣單。用條件式 UPDATE（status='open' 才改）
+    // 原子地把「判斷＋升級」做完；沒有列被改到（已 confirmed_ok／closed／別端先升）就直接收手。
+    final updated = await _sb
+        .from('radio_events')
+        .update({'status': 'escalated', 'severity': 'emergency'})
+        .eq('id', eventId)
+        .eq('status', 'open')
+        .select('id');
+    if (updated.isEmpty) return;
     await _sb.from('elders').update({'severity': 'emergency'}).eq('id', elderId);
     await _createTask(elderId, eventId, 'emergency');
   }

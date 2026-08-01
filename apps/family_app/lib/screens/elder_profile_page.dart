@@ -30,6 +30,7 @@ class _ElderProfilePageState extends State<ElderProfilePage> {
   late final TextEditingController _address;
   late final TextEditingController _phone;
   late final TextEditingController _note;
+  late ElderLang _lang; // 慣用語言（國語／台語）：收音機 TTS 與志工/後台都看這個
   bool _saving = false;
 
   @override
@@ -41,6 +42,7 @@ class _ElderProfilePageState extends State<ElderProfilePage> {
     _address = TextEditingController(text: e.address);
     _phone = TextEditingController(text: e.phone ?? '');
     _note = TextEditingController(text: e.note ?? '');
+    _lang = e.preferredLang;
   }
 
   @override
@@ -99,6 +101,10 @@ class _ElderProfilePageState extends State<ElderProfilePage> {
         lat: coord?.$1,
         lng: coord?.$2,
       );
+      // 語言另走 setElderLang（updateElderProfile 不含語言欄）；有變才寫，三端顯示一致。
+      if (_lang != widget.elder.preferredLang) {
+        await widget.local.backend.setElderLang(widget.elder.id, _lang);
+      }
       if (!mounted) return;
       final located = coord != null;
       final geocodeChanged = address != widget.elder.address.trim();
@@ -195,6 +201,12 @@ class _ElderProfilePageState extends State<ElderProfilePage> {
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 16),
+            // 慣用語言：收音機問診與安撫用這個語言念（志工派遣單、後台也會顯示）。
+            _LangField(
+              value: _lang,
+              onChanged: (v) => setState(() => _lang = v),
+            ),
+            const SizedBox(height: 16),
             _field(
               controller: _note,
               label: '狀況注記（選填）',
@@ -248,6 +260,37 @@ class _ElderProfilePageState extends State<ElderProfilePage> {
         helperMaxLines: 2,
         prefixIcon: Icon(icon),
         border: const OutlineInputBorder(),
+      ),
+    );
+  }
+}
+
+/// 慣用語言選擇（國語／台語），外觀與其他 _field 一致（含框線與標題）。
+class _LangField extends StatelessWidget {
+  const _LangField({required this.value, required this.onChanged});
+
+  final ElderLang value;
+  final ValueChanged<ElderLang> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InputDecorator(
+      decoration: const InputDecoration(
+        labelText: '慣用語言',
+        helperText: '收音機問診／安撫會用這個語言念；志工與社工後台也看得到',
+        helperMaxLines: 2,
+        prefixIcon: Icon(Icons.record_voice_over_outlined),
+        border: OutlineInputBorder(),
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      child: SegmentedButton<ElderLang>(
+        segments: const [
+          ButtonSegment(value: ElderLang.mandarin, label: Text('國語')),
+          ButtonSegment(value: ElderLang.taigi, label: Text('台語')),
+        ],
+        selected: {value},
+        showSelectedIcon: false,
+        onSelectionChanged: (s) => onChanged(s.first),
       ),
     );
   }

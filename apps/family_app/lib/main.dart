@@ -234,24 +234,45 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
-  /// 通知權限被拒的明顯提醒（不再靜默失效）。
+  /// 通知權限被拒的明顯提醒（不再靜默失效）。點一下重新請求權限——這是最攸關安全的
+  /// 設定（收不到跌倒／SOS 通知），不能只丟一句「請自己去設定」讓家屬找不到入口。
   Widget _permissionBanner() {
     return Material(
       color: const Color(0xFFFFF3CD),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          children: const [
-            Icon(Icons.notifications_off, color: Color(0xFF8A6D00), size: 20),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '通知權限未開啟，可能收不到跌倒／SOS 通知。請到手機「設定 → 通知」開啟。',
-                style: TextStyle(
-                    color: Color(0xFF8A6D00), fontSize: 13, height: 1.4),
+      child: InkWell(
+        onTap: () async {
+          final messenger = ScaffoldMessenger.of(context);
+          final user = widget.local.auth.currentUser;
+          if (user != null) {
+            await PushService.instance.registerForUser(user,
+                elderIds: widget.local.boundIds.toList());
+          }
+          if (!mounted) return;
+          if (PushService.instance.permissionBlocked.value) {
+            messenger.showSnackBar(const SnackBar(
+                content: Text('仍未取得通知權限，請到手機「設定 → 通知 → 金孫收音機」手動開啟'),
+                duration: Duration(seconds: 4)));
+          } else {
+            messenger.showSnackBar(const SnackBar(
+                content: Text('通知已開啟，跌倒／SOS 會即時通知你')));
+          }
+        },
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(Icons.notifications_off, color: Color(0xFF8A6D00), size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '通知權限未開啟，可能收不到跌倒／SOS 通知。點這裡重新開啟。',
+                  style: TextStyle(
+                      color: Color(0xFF8A6D00), fontSize: 13, height: 1.4),
+                ),
               ),
-            ),
-          ],
+              Icon(Icons.chevron_right, color: Color(0xFF8A6D00), size: 20),
+            ],
+          ),
         ),
       ),
     );

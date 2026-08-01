@@ -317,9 +317,34 @@ class _DispatchHeadsUpState extends State<_DispatchHeadsUp>
                     ),
                     if (widget.warning != null) ...[
                       const SizedBox(height: 8),
-                      Text(widget.warning!,
-                          style: const TextStyle(
-                              fontSize: 12, color: JinsunColors.warnText)),
+                      // 不能接單的原因要看得清楚（不是 12px 灰字一閃而過），
+                      // 志工才知道「接單」為什麼是灰的、該去哪補件。
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: JinsunColors.warnBg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: JinsunColors.warnText.withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline,
+                                size: 18, color: JinsunColors.warnText),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(widget.warning!,
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      height: 1.4,
+                                      fontWeight: FontWeight.w600,
+                                      color: JinsunColors.warnText)),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                     const SizedBox(height: 12),
                     Row(

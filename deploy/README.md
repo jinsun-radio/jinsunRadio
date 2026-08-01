@@ -63,6 +63,26 @@ bash deploy/aws/deploy-server.sh
 http://jinsun-alb-1316925531.us-west-2.elb.amazonaws.com
 ```
 
+### ①.5 ⚠️ 讓 https 網頁能打到 server（CloudFront https 前置，必做）
+
+ALB 只有 **HTTP**，但網頁部署在 https（Vercel／CloudFront）。https 頁呼叫 http server
+會被瀏覽器擋成 **mixed content** —— 家屬「立即提醒」按鈕、長輩收音機的 `/commands`
+長輪詢、`/voice`、`/tts` 全部會失敗。所以 server 也要一個 https 入口：
+
+```bash
+# 前提：deploy-server.sh 已跑過（ALB 在、/remind 已上 ECS）
+bash deploy/aws/setup-server-cloudfront.sh
+```
+
+會建一個 CloudFront distribution 前置 ALB，印出 `https://xxxx.cloudfront.net`。
+約 5–10 分鐘 Deployed 後，**這個 https 網址才是網頁要用的 `SERVER_URL`／`SIM_BASE`**。
+（API 專用：不快取、轉發所有 method/header/query/body、回源逾時 60 秒撐得住長輪詢。）
+
+> 吃藥提醒鏈路：家屬 App 按「立即提醒」→ `POST $SERVER_URL/remind`
+> → server `enqueue` 扇出 → MQTT `jinsun/{serial}/cmd`（真收音機發聲）＋長輪詢
+> （模擬器／長輩網頁 `GET /commands` 念出來）。真收音機那條與 server 是否 https 無關
+> （server 是 MQTT client 連 `mqttgo.io`）。
+
 ### ② 部署三端 Flutter Web（S3 + CloudFront）
 
 ```bash

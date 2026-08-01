@@ -41,6 +41,7 @@ dependencies:
   latlong2: ^0.9.1
   http: ^1.2.0          # 硬體模擬頁：呼叫雲端 server /voice、/commands
   supabase_flutter: ^2.8.0
+  url_launcher: ^6.3.0  # 地址開 Google Maps、電話 tel: 直撥
 
 dev_dependencies:
   flutter_test:

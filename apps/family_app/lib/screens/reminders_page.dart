@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:jinsun_ui_kit/jinsun_ui_kit.dart';
 
 import '../app_local.dart';
+import '../services/reminder_push.dart';
 
 class RemindersPage extends StatelessWidget {
   const RemindersPage({super.key, required this.local});
@@ -10,6 +11,35 @@ class RemindersPage extends StatelessWidget {
 
   static String _fmt(TimeOfDay t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  /// 家屬手動按「立即提醒」：請這位長輩的收音機現在就把提醒念出來。
+  /// 走雲端 server → MQTT 下發給真收音機（模擬器／長輩網頁也會同步念）。
+  Future<void> _remindNow(BuildContext context, Reminder r) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final elder = local.primaryElder;
+    final serial = elder?.deviceSerial;
+    if (elder == null || serial == null || serial.isEmpty) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('這位長輩還沒綁定收音機，無法語音提醒')));
+      return;
+    }
+    messenger.clearSnackBars();
+    messenger.showSnackBar(SnackBar(
+        content: Text('正在提醒 ${elder.name} 的收音機…'),
+        duration: const Duration(seconds: 1)));
+    // 念給長輩聽的完整句子（收音機端會依長輩慣用語言念國語／台語）。
+    final spoken = '${elder.name}，${r.text}時間到了，記得完成喔，需要幫忙就跟我們說一聲。';
+    final ok = await pushReminder(deviceSerial: serial, text: spoken);
+    if (!context.mounted) return;
+    messenger.clearSnackBars();
+    messenger.showSnackBar(SnackBar(
+      backgroundColor:
+          ok ? JinsunColors.okText : const Color(0xFFC62828),
+      content: Text(ok
+          ? '已請 ${elder.name} 的收音機念出「${r.text}」提醒'
+          : '提醒送出失敗，請稍後再試（收音機可能離線）'),
+    ));
+  }
 
   Future<void> _edit(BuildContext context, {Reminder? existing}) async {
     final controller = TextEditingController(text: existing?.text ?? '');
@@ -162,8 +192,9 @@ class RemindersPage extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 90),
           children: [
-            const Text('設定後即時同步到收音機，長輩會聽到語音提醒（斷網也照常播放）。點提醒可編輯。',
-                style: TextStyle(fontSize: 13, color: JinsunColors.muted)),
+            const Text('設定長輩每日的吃藥、量測提醒，收音機會語音播報。'
+                '按 🔊 可「立即提醒」讓收音機現在就念一次；點提醒可編輯、可刪除。',
+                style: TextStyle(fontSize: 13.5, color: JinsunColors.muted)),
             const SizedBox(height: 14),
             ...local.reminders.map((r) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
@@ -204,6 +235,16 @@ class RemindersPage extends StatelessWidget {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // 手動立即提醒：按下就讓收音機現在念出來（不必等排程時間）。
+                          IconButton.filled(
+                            tooltip: '立即提醒收音機',
+                            style: IconButton.styleFrom(
+                                backgroundColor: JinsunColors.orange,
+                                foregroundColor: Colors.white),
+                            icon: const Icon(Icons.volume_up, size: 20),
+                            onPressed: () => _remindNow(context, r),
+                          ),
+                          const SizedBox(width: 4),
                           IconButton(
                             tooltip: '編輯提醒',
                             icon: const Icon(Icons.edit_outlined,
@@ -214,7 +255,24 @@ class RemindersPage extends StatelessWidget {
                             tooltip: '刪除提醒',
                             icon: const Icon(Icons.delete_outline,
                                 color: JinsunColors.muted),
-                            onPressed: () => local.removeReminder(r),
+                            // 小圖示容易誤觸；刪掉不直接消失，給「復原」5 秒反悔，
+                            // 避免家屬手滑清掉長輩的吃藥提醒又救不回來。
+                            onPressed: () {
+                              final removed = Reminder(
+                                  text: r.text, times: [...r.times]);
+                              final idx = local.removeReminder(r);
+                              final messenger = ScaffoldMessenger.of(context);
+                              messenger.clearSnackBars();
+                              messenger.showSnackBar(SnackBar(
+                                content: Text('已刪除「${removed.text}」提醒'),
+                                duration: const Duration(seconds: 5),
+                                action: SnackBarAction(
+                                  label: '復原',
+                                  onPressed: () =>
+                                      local.restoreReminder(idx, removed),
+                                ),
+                              ));
+                            },
                           ),
                         ],
                       ),
