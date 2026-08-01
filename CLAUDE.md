@@ -88,6 +88,8 @@ Demo 操作：app 開啟後按右下角「模擬收音機」觸發事件（疑�
 
 Himax WiseEye2 跑跌倒視覺推論（影像不外傳），Realtek AmebaPro2 做主控／麥克風／Wi-Fi／MQTT。裝置接收雲端下發的指令目前有 `ask`（語音詢問）與 `speak`（播報／安撫），新增指令類型時同步更新 `docs/architecture.md` 的 sequence 說明。
 
+AmebaPro2 的 NPU 已跑**本地音訊分類（YAMNet）**：求救聲 → 自動開始錄音（與長按按鈕同一條路徑）；撞擊聲**絕不單獨上報**，只開 3 秒佐證窗，窗內再聽到求救才送 `fall_suspected`。推論全在裝置端，音訊不外傳。⚠️ 這讓 flash 從 28% 跳到 84%（`yamnet_fp16.nb` 就 8.7 MB），**再加視覺模型幾乎塞不下**，動到韌體模型前先讀 `firmware/HUB-8735-Ultra-ASR-TTS/README.md` 的已知限制。
+
 ## Admin（admin/）
 
 Web 優先。功能：全體長輩即時狀態 dashboard（正常／注意／緊急）、關注排序、派遣監控、Excel 匯出（政府需求，必備）。技術棧尚未定案，選型時記錄決策到 `docs/requirements/`。

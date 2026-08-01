@@ -37,8 +37,8 @@ flowchart LR
     PROG -- "publish jinsun/{serial}/cmd<br/>speak（帶 lang）" --> BRK["MQTT broker<br/>（原型：aedes 內嵌於 server<br/>正式：AWS IoT Core）"]
     BRK -- "push（走裝置既有連線，<br/>NAT 後也收得到）" --> MQ
 
-    EP -- "reply 文字" --> TTS["雲端 TTS<br/>（ATEN，回 WAV URL）"]
-    MQ -- "speak 文字" --> TTS
+    EP -- "reply 文字＋lang" --> TTS["雲端 TTS（依 lang 分流）<br/>台語：ATEN（回 WAV URL）<br/>國語：Polly Zhiyu（直接回 WAV）"]
+    MQ -- "speak 文字＋lang" --> TTS
     TTS -- "WAV 串流" --> SPK
 ```
 

@@ -150,8 +150,9 @@ export ELDER_DEVICE_PASS='Radio!2026jinsun'
 
 | 資源 | 名稱 |
 |---|---|
-| Lambda | `jinsun-voice`、`jinsun-speak`、`jinsun-progress`、`jinsun-data`＊、`jinsun-auth`＊ |
-| API Gateway | `jinsun-voice-api`（`$default`、`POST /hooks/progress`、`/data/*`＊） |
+| Lambda | `jinsun-voice`、`jinsun-speak`、`jinsun-progress`、`jinsun-data`＊、`jinsun-auth`＊、`jinsun-tts` |
+| API Gateway | `jinsun-voice-api`（`$default`、`POST /hooks/progress`、`/data/*`＊、`POST /tts`） |
+| TTS（國語） | `jinsun-tts` + `POST /tts`（Amazon Polly Zhiyu neural）。**兩套環境都打它**——無狀態服務、無資料落地，同 ASR gateway 的處理。台語不在這裡（走外部 ATEN，見 `hardware-integration.md` §1） |
 | ASR | `POST /asr`（走 `$default` → `jinsun-voice`），代理 XCC Gateway 的 Breeze ASR；PAT 在 `jinsun-voice` 的 `XCC_GATEWAY_PAT` 環境變數 |
 | Cognito＊ | User Pool `jinsun-users`、Client `jinsun-apps`、Group `family`/`volunteer`/`worker` |
 | S3＊ | `jinsun-proofs`（結案照片）、`jinsun-{family,volunteer,admin}-web`（三端靜態站） |
@@ -230,7 +231,7 @@ curl -s $API_BASE/health
 |---|---|
 | `send-push` Edge Function | → Lambda + SNS Mobile Push。`device_tokens` 已經會寫進 Aurora，發送端還沒接 |
 | `whisper` Edge Function | → Lambda + Transcribe。`AwsBackend.transcribeAudio` 目前明確丟 501，不會靜默回空字串 |
-| 台語 ASR/TTS | → SageMaker endpoint（Transcribe 無台語；`ml.g4dn.xlarge` 配額為 2） |
+| 台語 ASR | → SageMaker endpoint（Transcribe 無台語；`ml.g4dn.xlarge` 配額為 2）。**TTS 不在此列**——台語 TTS 續用 ATEN（本來就是台語模型），國語 TTS 已由 `jinsun-tts`（Polly Zhiyu）接上，見 `deploy-tts.sh` |
 | AppSync 真訂閱 | 目前用變更指紋輪詢（3 秒）。**這是刻意的取捨，理由見 `aws-architecture.md` §4.4**；要升級時 `AwsBackend` 對外介面不必動 |
 
 ---

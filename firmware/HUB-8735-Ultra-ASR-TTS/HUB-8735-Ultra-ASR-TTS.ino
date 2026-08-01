@@ -9,6 +9,12 @@
 #include <ArduinoJson.h>
 #include <MAX98357.h>
 #include <PubSubClient.h>
+#include <errno.h>
+#include "NNAudioClassification.h"
+// 521 類 YAMNet 標籤表(從 SDK 的 AudioClassification 範例複製過來,索引由訓練時固定)。
+// 只拿來把 class id 轉成人看得懂的名字寫進 log——實際要不要反應由下面自己的白名單決定,
+// 不用它的 filter 欄位(那是範例的做法,改 521 行的表比讀一份白名單難維護太多)。
+#include "AudioClassList.h"
 
 // ===== 機密設定（不進版控）=====
 // 把 secrets.h.example 複製成 secrets.h（同資料夾，已在 .gitignore）並填入實際值。
@@ -50,9 +56,22 @@ String model = "paulpengtw/faster-whisper-Breeze-ASR-26";                       
 String FILENAME_EXT = String(FILENAME)+".mp4";
 int recordSeconds = 30;         // 最長錄音上限(秒);可按鈕/序列輸入提前結束
 
-// TTS(文字轉語音)伺服器
+// ===== TTS(文字轉語音):兩顆服務,依下行的 lang 分流 =====
+// 台語:ATEN。⚠️ 這顆是**台語模型**,而且端點不吃 voice/lang 參數,
+//       所以它只會講台語 —— 沒辦法拿它來念國語。
 char tts_server[] = "kws.oaselab.org";
 String tts_path = "/nutntweng/tts/aten/";
+
+// 國語:Amazon Polly(Zhiyu),經 API Gateway 的 jinsun-tts Lambda。
+// 回應直接是 WAV bytes(不是 ATEN 那種 JSON URL),POST 完就能邊收邊播,
+// 少一次 TLS 握手(板子上一次握手就要幾百毫秒)。
+// 部署:bash cloud/aws/scripts/deploy-tts.sh
+//
+// 刻意**不用 #if BACKEND_AWS 包起來**:TTS 是無狀態的服務呼叫、沒有資料落地,
+// 不違反「兩套環境不共用資料庫」—— ASR 那顆 gateway(llm-gateway.xcc.tw)本來
+// 也是兩邊共用的。這樣 Render 環境同樣念得出國語。
+char tts_mandarin_server[] = "yr0ep335el.execute-api.us-west-2.amazonaws.com";
+String tts_mandarin_path = "/tts";
 
 // ===== 雲端語音 Agent server(上行 POST /voice) =====
 // 契約見 docs/requirements/hardware-integration.md §3①:
@@ -79,7 +98,7 @@ String voice_path = "/voice";
 //    ${iot:Connection.Thing.ThingName} 限縮 client id 與 topic(cloud/aws/iot/device-policy.json),
 //    所以 device_serial ≠ Thing 名稱 → 連線直接被切斷,而且不會有任何錯誤訊息。
 //    AWS 上已建好的 Thing 是 JS-0001 與 JS-REAL-0001,燒進去的憑證要 attach 到同一個。
-String device_serial = "JS-0001";
+String device_serial = "JS-0002";
 
 // ===== MQTT 下行(server publish → 裝置) =====
 // 契約見 §3②:訂閱 jinsun/{serial}/cmd(QoS 1)、keep-alive 30s、
@@ -224,7 +243,11 @@ int cmdCount = 0;
 // MAX98357 I2S 揚聲器:BCLK→D24、LRC→D12、DIN→D11、SD_MODE→D10
 // (同時佔用 D22/D23,板載按鈕不可用)
 MAX98357 amp;
-float ampVolume = 0.8;             // volume_up/volume_down 指令會調整這個值
+// volume_up/volume_down 指令會調整這個值。
+// ⚠️ 這是**兩顆 TTS 共用**的總音量，不要拿它補單一服務的音量差——Polly 那條路曾經
+// 上板聽起來偏小聲(Polly 原始輸出峰值只到 −10 dBFS)，那是在 jinsun-tts Lambda 端做
+// 峰值正規化解決的;從這裡調會連 ATEN(台語)一起變大聲，而且只剩 0.2 可加。
+float ampVolume = 0.8;
 String lastSpokenText = "";        // repeat 指令要重播的內容
 String lastSpokenLang = "mandarin";
 
@@ -241,12 +264,115 @@ File file;
 //
 // HUB 8735 Ultra 板載麥克風是數位 PDM，用 1(類比) 會錄到一片死寂（實測 -74dBFS）。
 // 改用 3 = 16kHz Mono Digital PDM Mic。若換板子或外接類比麥克風，再改回 1。
+// 順帶一提:preset 3 展開後就是 AudioSetting(16000, 1, USE_AUDIO_LEFT_DMIC),
+// 與 SDK 的 AudioClassification 範例逐欄位相同——YAMNet 只吃 16kHz,所以錄音與
+// 聲音偵測可以共用同一份設定、同一顆麥克風,不用開第二條音訊管線。
 AudioSetting configA(3);
 Audio audio;
 AAC aac;
 MP4Recording mp4;
-StreamIO audioStreamer1(1, 1);    // 1 Input Audio -> 1 Output AAC
 StreamIO audioStreamer2(1, 1);    // 1 Input AAC -> 1 Output MP4
+
+// ================= 本地聲音事件偵測(NPU / YAMNet) =================
+//
+// 【隱私】整段推論都在 RTL8735B 的 NPU 上跑,音訊**從來不離開這塊板子**——
+// 上行的只有「聽到什麼類別」導出的事件(CLAUDE.md 約束 1)。這條線不能被打破:
+// 不要為了「雲端判得比較準」把音訊 buffer 傳出去。
+//
+// 【行為】契約見 docs/requirements/hardware-integration.md §觸發方式:
+//   ① distress(呼救/尖叫/呻吟/哭) → 觸發**與長按按鈕完全相同**的喚醒錄音流程,
+//      長輩喊得出聲但按不到按鈕時也能求救(按鈕仍是不依賴任何模型的最終退路)。
+//   ② impact(撞擊/摔落/玻璃破裂) → **絕不單獨上報**。誤報成本太高:關門、放鍋子、
+//      掉遙控器都會觸發,而每一次誤報都是一張志工派遣單。撞擊只開一扇「佐證窗」,
+//      窗內若再聽到 distress,才視為高信心跌倒直接送 fall_suspected(跳過問診,
+//      因為此時已經有兩個獨立訊號)。未來 Himax 視覺跌倒推論接上來之後,
+//      recentImpact() 就是它的第二個佐證來源。
+//
+// 設 0 可整段關掉(模型載不進去、或想單獨驗證按鈕流程時)。
+#define ENABLE_SOUND_DETECTION 1
+
+#if ENABLE_SOUND_DETECTION
+NNAudioClassification audioNN;
+// audio 一份輸入分流給兩個消費者:AAC(錄音上雲用)與 NPU 音訊分類(永遠在本地)。
+// SIMO(1 進 2 出)是 StreamIO 內建的,不需要開第二個 Audio 實例——板上只有一顆
+// PDM 麥克風,開兩個 Audio 會搶同一個週邊。
+StreamIO audioStreamer1(1, 2);    // 1 Input Audio -> AAC + Audio Classification
+#else
+StreamIO audioStreamer1(1, 1);    // 1 Input Audio -> 1 Output AAC
+#endif
+
+#if ENABLE_SOUND_DETECTION
+// distress:長輩發得出來的求救聲。刻意不收 8 Whoop(歡呼)與 20 Baby cry(嬰兒哭),
+// 那兩類在獨居長輩家出現時幾乎都是電視聲。
+const int distressClasses[] = {
+    6,     // Shout
+    7,     // Bellow
+    9,     // Yell
+    11,    // Screaming
+    19,    // Crying, sobbing
+    21,    // Whimper
+    22,    // Wail, moan
+    33,    // Groan
+    39,    // Gasp
+};
+
+// impact:人或物體重摔的聲音。刻意不收 348 Door / 353 Knock / 358 Dishes——
+// 那是日常家事的聲音,收進來會讓佐證窗幾乎整天開著,等於沒有佐證。
+const int impactClasses[] = {
+    352,    // Slam
+    430,    // Boom
+    435,    // Glass
+    437,    // Shatter
+    454,    // Thump, thud
+    455,    // Thunk
+    460,    // Bang
+    463,    // Smash, crash
+    464,    // Breaking
+};
+
+// score() 回傳的是 prob*100(0–100)。門檻是靠實機在場域調的,不是理論值:
+// distress 訂得低一點(寧可多錄幾秒也不要漏掉求救——誤觸發的代價只是白錄一段),
+// impact 訂得高一點(它會餵給跌倒判斷,誤報的代價是派出志工)。
+const int distressScoreThreshold = 45;
+const int impactScoreThreshold = 60;
+
+// 撞擊之後多久內聽到求救聲,才算「同一起跌倒」。3 秒是人摔倒後喊出第一聲的
+// 典型延遲;拉太長會把「剛剛關了門」跟「現在在講電話」也串成跌倒。
+const unsigned long impactCorroborationMs = 3000;
+// 兩次聲音喚醒的最短間隔:一次喚醒後面接的是錄音→ASR→/voice,幾十秒跑不完,
+// 沒有冷卻的話電視劇裡一段爭吵就能連開十幾張單。
+const unsigned long soundWakeCooldownMs = 60000;
+
+// NN 執行緒 → 主迴圈的單向交接。callback 只寫這幾個變數就返回,
+// 真正會阻塞的事(播提示音、開錄音、HTTPS 上報)一律留到主迴圈做——
+// 理由和 MQTT callback 那邊一樣,在別人的執行緒裡阻塞會拖垮整條管線。
+volatile bool distressPending = false;
+volatile bool impactPending = false;
+volatile int pendingDistressClass = -1;
+volatile int pendingDistressScore = 0;
+volatile int pendingImpactClass = -1;
+volatile int pendingImpactScore = 0;
+volatile unsigned long lastImpactAt = 0;         // 佐證窗的起點(0 = 還沒聽過撞擊)
+volatile unsigned long soundGateUntil = 0;       // 在此時間點之前收到的偵測一律丟棄
+volatile bool speakerActive = false;             // 自己的喇叭正在出聲 → 偵測結果不可信
+unsigned long lastSoundWakeAt = 0;               // 只有主迴圈碰,不用 volatile
+
+// 診斷模式(序列埠 snddebug 開關):把**每一次**推論的前幾名原樣印出來,不管有沒有
+// 進白名單、也不管有沒有過門檻。
+// 沒有這個模式就沒辦法調門檻——平常的 [SND] log 本身就被門檻擋著,
+// 「喊了沒反應」到底是模型沒載進去、麥克風沒聲音、還是分數差一點,從 log 上分不出來。
+#define SND_DEBUG_SLOTS 3
+volatile bool soundDebug = false;
+volatile int debugClass[SND_DEBUG_SLOTS];
+volatile int debugScore[SND_DEBUG_SLOTS];
+volatile int debugCount = 0;
+volatile bool debugPending = false;
+#endif    // ENABLE_SOUND_DETECTION
+
+// 喚醒錄音的長度(秒)。按鈕觸發時長輩會自己再按一下結束,聲音喚醒沒有人按,
+// 只能靠 mp4 自己到點收工——30 秒太久(求救的人要乾等半分鐘才聽到回應),
+// 所以聲音喚醒改用較短的上限。
+const int wakeRecordSeconds = 8;
 
 // 初值設 HIGH(＝沒被按,因為是 INPUT_PULLUP)。若留預設 0(LOW),開機第一輪會
 // 誤判成「剛剛放開按鈕」而印出一筆假的邊緣 log,診斷時會被誤導。
@@ -265,6 +391,26 @@ unsigned long mqttNextAttempt = 0;
 unsigned long mqttBackoff = 1000;
 const unsigned long mqttBackoffMax = 30000;
 
+// 斷線診斷:記住「這次連線是什麼時候建立的」,斷掉時才能印出它撐了多久。
+// 每秒重連一次跟每小時重連一次成因完全不同,但沒有這個數字兩者的 log 長得一樣。
+bool mqttWasConnected = false;
+unsigned long mqttConnectedAt = 0;
+
+// 📌 2026-08-01 實測結論(別再往韌體這邊查了):
+//    斷線 log 穩定印出 `state=-3 errno=128`,而且每次連線都恰好撐 ~500ms。
+//      state=-3 = MQTT_CONNECTION_LOST → 底層 TLS 說「沒連線」
+//      errno=128 = **ENOTCONN**(newlib 的值,見 toolchain 的 sys/errno.h)
+//                  ——這是真的「對端把連線關了」,不是殘值、不是誤判。
+//    也就是說:AWS IoT **接受了 CONNECT,然後半秒後主動切斷**。這正是它對
+//    「授權失敗」的標準反應(不回 CONNACK 錯誤碼,直接斷 TCP,見本檔 deviceCertReady()
+//    上方的說明)。最常見成因是憑證沒 attach 到 Thing → policy 裡的
+//    ${iot:Connection.Thing.ThingName} 解不出值 → subscribe/publish 全被拒 → 斷線。
+//    排查步驟寫在 firmware/README.md 的「MQTT 一直重連」那節。
+//
+// (曾經懷疑是 WiFiSSLClient::available() 讀到別人留下的全域 errno 而誤殺連線——
+//  get_ssl_sock_errno() 確實只是 `return errno;` 且沒人清。但實測 errno 就是
+//  ENOTCONN 本身,不是殘值,所以那條路是死的,對應的 workaround 已移除。)
+
 // 前向宣告(這些函式彼此互相呼叫,也在定義之前就被 setup()/loop() 用到)
 void onMqttMessage(char* topic, uint8_t* payload, unsigned int length);
 void mqttPump();
@@ -279,6 +425,16 @@ String sendAudioTpWhisper();
 bool skipHttpHeaders(WiFiSSLClient &c, uint32_t timeoutMs);
 String collectJsonBody(WiFiSSLClient &client, uint32_t timeoutMs);
 String extractJson(const String &raw);
+void startRecording(int seconds, const String &why);
+bool playPrompt(const char *file);
+void speakerOutputBegin();
+void speakerOutputEnd();
+#if ENABLE_SOUND_DETECTION
+void onAudioClassified(std::vector<AudioClassificationResult> results);
+void pumpSoundDetection();
+bool recentImpact();
+String soundClassName(int classId);
+#endif
 
 
 void setup()
@@ -338,6 +494,17 @@ void setup()
                    + " | MQTT " + String(mqtt_server) + ":" + String(mqtt_port));
 #endif
 
+    // 喚醒模式也要印:誤以為聲音喚醒是開著的、實際上模型沒載進去,
+    // 現場只會看到「喊了沒反應」,而那跟麥克風壞掉長得一模一樣。
+#if ENABLE_SOUND_DETECTION
+    Serial.println(String("[SND] 喚醒模式：按鈕長按 + 本地 NPU 聲音偵測（YAMNet，音訊不上雲）")
+                   + " | 求救聲門檻 " + String(distressScoreThreshold)
+                   + " / 撞擊聲門檻 " + String(impactScoreThreshold)
+                   + " | 撞擊佐證窗 " + String(impactCorroborationMs / 1000) + " 秒");
+#else
+    Serial.println("[SND] 喚醒模式：僅按鈕長按（聲音偵測已於編譯期關閉）");
+#endif
+
     // MQTT 下行:設定好參數,實際連線交給 loop() 的 mqttPump()(帶退避重連),
     // 這樣即使開機時 broker 連不上也不會卡住開機流程。
     mqttNet.setRootCA((unsigned char*)mqtt_root_ca);
@@ -351,7 +518,29 @@ void setup()
     // 預設 buffer 只有 512 bytes,而中文 speak 指令一個字就 3 bytes,
     // 進度播報那種長句加上 JSON 外殼很容易超過 → 封包會被整個丟掉。
     mqtt.setBufferSize(1024);
-    mqtt.setPublishQos(1);    // 上下線狀態也走 QoS 1
+    // ⚠️ 這裡**刻意不呼叫 setPublishQos()**(2026-08-01 實測,別再加回來)。
+    //
+    // 原本寫的是 `mqtt.setPublishQos(1)`,想讓上下線狀態走 QoS 1,但那是錯的:
+    // 這支 API 收的是**已經位移過的常數**(`#define MQTTQOS1 (1 << 1)` = 2),
+    // 而實作是 `header |= pub_qos;`。MQTT 固定標頭的位元是
+    //     [type:4][DUP:1][QoS:2][RETAIN:1]   ← bit 0 是 RETAIN
+    // 所以傳 1 進去根本不是 QoS 1,而是**把 RETAIN 旗標打開**。
+    // 於是 publish("jinsun/{serial}/status","online") 變成一則保留訊息,
+    // 而 AWS IoT 對保留訊息要求**另一個權限 `iot:RetainPublish`**
+    // (cloud/aws/iot/device-policy.json 只給了 iot:Publish)→ 被拒 → IoT Core
+    // 直接關閉連線。症狀:CONNECT 成功、SUBSCRIBE 成功,約 500ms 後斷線,無限重連,
+    // 而且完全查不出原因(不回錯誤碼,log 只有 state=-3 errno=128/ENOTCONN)。
+    //
+    // 那改成 setPublishQos(MQTTQOS1) 不就對了?**不行**,SDK 的 QoS≥1 分支還有一個
+    // packet id 寫入 bug(PubSubClient.cpp):
+    //     buffer[id_pos]   = (nextMsgId >> 8);
+    //     buffer[id_pos++] = (nextMsgId & 0xFF);   ← 後置遞增,兩行寫到同一格
+    // MSB 被 LSB 蓋掉,第二個位元組從沒被寫入(留著上一個封包的殘值)→ 送出去的
+    // packet identifier 是壞的。所以這條路現在不能走。
+    //
+    // 用預設的 QoS 0 送 status 完全夠用:它只是個「我在線」的標記,離線那半由 LWT
+    // 負責;真正需要可靠投遞的是**下行指令**,那條走的是 subscribe QoS 1 +
+    // cleanSession=false,跟 setPublishQos 無關,完全不受影響。
 
     // Configure audio peripheral for audio data output
     audio.configAudio(configA);
@@ -359,6 +548,20 @@ void setup()
     // Configure AAC audio encoder
     aac.configAudio(configA);
     aac.begin();
+
+#if ENABLE_SOUND_DETECTION
+    // NPU 音訊分類(YAMNet)。modelSelect() 一定要在 begin() 之前呼叫,而且
+    // 第一個參數必須是 AUDIO_CLASSIFICATION——填錯的話 SDK 會停在 while(1) 迴圈裡
+    // 每 5 秒印一次錯誤,開機看起來就是「卡住」。其餘四個 NA_MODEL 是沒用到的視覺任務。
+    //
+    // 模型從 flash 讀:Arduino IDE 的 Tools → NN Model Load From 要選 **Flash**
+    // (預設值,對應 variants/common_nn_models/yamnet_fp16.nb);選 SD Card 的話
+    // 記憶卡根目錄要自己放模型檔,而這張卡同時在存錄音,不值得多這個變數。
+    audioNN.configAudio(configA);
+    audioNN.setResultCallback(onAudioClassified);
+    audioNN.modelSelect(AUDIO_CLASSIFICATION, NA_MODEL, NA_MODEL, NA_MODEL, DEFAULT_YAMNET);
+    audioNN.begin();
+#endif
 
     // Configure MP4 recording settings
     mp4.configAudio(configA, CODEC_AAC);
@@ -369,7 +572,14 @@ void setup()
 
     // Configure StreamIO object to stream data from audio channel to AAC encoder
     audioStreamer1.registerInput(audio);
+#if ENABLE_SOUND_DETECTION
+    // SIMO:同一份麥克風資料同時餵給 AAC(只有按下錄音時才會被寫成檔案)
+    // 與 NPU 分類器(從開機到關機一直在跑)。
+    audioStreamer1.registerOutput1(aac);
+    audioStreamer1.registerOutput2(audioNN);
+#else
     audioStreamer1.registerOutput(aac);
+#endif
     if (audioStreamer1.begin() != 0) {
         Serial.println("StreamIO link start failed");
     }
@@ -385,7 +595,7 @@ void setup()
     // SD 正常 → 播 ready.wav(若存在),否則合成「上揚雙音」;
     // SD 異常 → 合成「三聲低音」警告。
     if (sdOK) {
-        if (!amp.playWav(fs, "ready.wav")) {
+        if (!playPrompt("ready.wav")) {
             playChime(true);
         }
         Serial.println("System ready!");
@@ -403,6 +613,11 @@ void loop()
     if (recordingstate != 1) {
         drainCommandQueue();
     }
+
+#if ENABLE_SOUND_DETECTION
+    // 本地聲音事件:NN 執行緒只放旗標,真正的動作(播提示音、開錄音、上報)在這裡做
+    pumpSoundDetection();
+#endif
 
     // Button state
     // 診斷 log:每個電平邊緣印一次,帶上「維持了多久」——按鈕行為出問題時,
@@ -453,10 +668,7 @@ void loop()
             //    直到 mp4 回報 recordingstate=1 為止。
             Serial.println("[BTN] → 開始錄音（本次已按住 "
                            + String(millis() - buttonPressTime) + " ms）");
-            // 先播開場提示音,播完才開始錄音
-            amp.playWav(fs, "init.wav");
-            mp4.begin();
-            stopArmed = false;    // 此刻按鈕還被按住,先不接受停止;放開後才 arm
+            startRecording(recordSeconds, "按鈕長按");
             Serial.println("Recording (press button again or type 'stop' to finish)");
         }
     }
@@ -490,6 +702,30 @@ void loop()
             } else if (serialLine == "fall") {
                 sendEvent("fall_suspected");
             }
+#if ENABLE_SOUND_DETECTION
+            // 聲音偵測的模擬觸發:直接偽造 NN callback 的產物,走完全相同的下游邏輯。
+            // 沒有這兩個指令,要驗「撞擊 + 求救 = 跌倒」就得真的在辦公室摔東西再尖叫,
+            // 而且門檻沒調好時根本分不出是判斷邏輯錯還是模型沒聽到。
+            else if (serialLine == "bang") {
+                pendingImpactClass = 454;    // Thump, thud
+                pendingImpactScore = 99;
+                lastImpactAt = millis();
+                impactPending = true;
+                Serial.println("[SND] (模擬) 撞擊聲");
+            } else if (serialLine == "shout") {
+                pendingDistressClass = 6;    // Shout
+                pendingDistressScore = 99;
+                distressPending = true;
+                Serial.println("[SND] (模擬) 求救聲");
+            } else if (serialLine == "sndreset") {
+                lastSoundWakeAt = 0;
+                lastImpactAt = 0;
+                Serial.println("[SND] 已清除冷卻與佐證窗");
+            } else if (serialLine == "snddebug") {
+                soundDebug = !soundDebug;
+                Serial.println(String("[SND] 診斷模式 ") + (soundDebug ? "開（每次推論都印前 3 名）" : "關"));
+            }
+#endif
             serialLine = "";
         } else if (c != '\r') {
             serialLine += c;
@@ -509,7 +745,7 @@ void loop()
         // 300ms + wait.wav 的播放時間,足夠讓 MP4 檔案收尾寫完
         delay(300);
         // 等待期間播放提示音,墊住 STT/TTS 的處理時間
-        amp.playWav(fs, "wait.wav");
+        playPrompt("wait.wav");
         String text = sendAudioTpWhisper();
         Serial.println(text);
         if (text.length() > 0 && text != "null" && !text.startsWith("Connected to")) {
@@ -562,9 +798,25 @@ void onMqttMessage(char* topic, uint8_t* payload, unsigned int length)
 void mqttPump()
 {
     if (mqtt.connected()) {
+        if (!mqttWasConnected) {
+            mqttWasConnected = true;
+            mqttConnectedAt = millis();
+        }
         mqtt.loop();
         return;
     }
+
+    // 剛剛還連著、現在斷了 → 把現場證據印出來。
+    //   state=-3 (MQTT_CONNECTION_LOST)     底層 TLS 說「沒連線」
+    //   state=-4 (MQTT_CONNECTION_TIMEOUT)  keep-alive ping 沒等到回應
+    //   errno=128 (ENOTCONN)  對端把連線關了 → 往雲端那側查(IoT policy/憑證),不是韌體問題
+    //   errno=11  (EAGAIN)    只是暫時沒資料,不該伴隨斷線;真出現代表另有成因
+    if (mqttWasConnected) {
+        mqttWasConnected = false;
+        Serial.println("[MQTT] ✗ 斷線（這次連線撐了 " + String(millis() - mqttConnectedAt)
+                       + " ms）state=" + String(mqtt.state()) + " errno=" + String(errno));
+    }
+
     if (millis() < mqttNextAttempt) {
         return;    // 還沒到下次重試時間
     }
@@ -649,15 +901,31 @@ void drainCommandQueue()
     }
 }
 
+// 音量夾在 0.0–1.0。這裡刻意不用 Arduino 的 min()/max() 巨集,也不用 std::min/max:
+// NNAudioClassification.h 為了安全引入 <vector>,在 include 前會 #undef min / #undef max
+// (那兩個巨集會把 STL 的 std::min 展開壞掉),所以巨集在本檔案裡已經不存在;
+// 反過來若在它之前 #include <algorithm>,巨集又還在、換成 STL 那邊編不過。
+// 自己寫三行就完全不必在意這個先後順序。
+static float clampVolume(float v)
+{
+    if (v > 1.0f) {
+        return 1.0f;
+    }
+    if (v < 0.0f) {
+        return 0.0f;
+    }
+    return v;
+}
+
 // 裝置動作指令:volume_up / volume_down / stop_speak / repeat
 void doDeviceCommand(const String &command)
 {
     Serial.println("[CMD] " + command);
     if (command == "volume_up") {
-        ampVolume = min(1.0f, ampVolume + 0.2f);
+        ampVolume = clampVolume(ampVolume + 0.2f);
         amp.setVolume(ampVolume);
     } else if (command == "volume_down") {
-        ampVolume = max(0.0f, ampVolume - 0.2f);
+        ampVolume = clampVolume(ampVolume - 0.2f);
         amp.setVolume(ampVolume);
     } else if (command == "repeat") {
         if (lastSpokenText.length() > 0) {
@@ -672,6 +940,188 @@ void doDeviceCommand(const String &command)
         Serial.println("[CMD] 未知裝置指令,忽略");
     }
 }
+
+// ================= 喇叭輸出與錄音的共用進出口 =================
+
+// 喇叭開始／結束出聲。存在的理由只有一個:麥克風聽得到自己的喇叭。
+// 不擋的話,TTS 的人聲會被 YAMNet 判成 Speech/Shout、提示音會被判成 Beep/Bang,
+// 於是「播報 → 誤判成求救 → 又開始錄音 → 又播報」無限循環。
+// (ENABLE_SOUND_DETECTION 為 0 時整組是空操作,呼叫端不必包 #if。)
+void speakerOutputBegin()
+{
+#if ENABLE_SOUND_DETECTION
+    speakerActive = true;
+#endif
+}
+
+void speakerOutputEnd()
+{
+#if ENABLE_SOUND_DETECTION
+    speakerActive = false;
+    // 喇叭剛停還不能馬上採信:室內殘響會拖一下,而且 YAMNet 是以約 1 秒的窗推論,
+    // 跨在停播瞬間的那個窗裡有一半是我們自己的聲音 → 再多丟掉 1 秒。
+    soundGateUntil = millis() + 1000;
+#endif
+}
+
+// 播 SD 卡上的提示音(ready/init/wait),播放期間關掉聲音偵測。
+bool playPrompt(const char *file)
+{
+    speakerOutputBegin();
+    bool ok = amp.playWav(fs, file);
+    speakerOutputEnd();
+    return ok;
+}
+
+// 開始一次錄音。seconds 是自動收工的上限:
+//   按鈕觸發 → recordSeconds(長輩講完會自己再按一下結束,上限只是保險)
+//   聲音喚醒 → wakeRecordSeconds(沒有人會來按,只能等它到點,所以要短)
+// 提示音先播完才 mp4.begin(),否則 init.wav 會被錄進要送去 ASR 的檔案裡。
+void startRecording(int seconds, const String &why)
+{
+    Serial.println("[REC] ▶ 開始錄音（" + why + "，最長 " + String(seconds) + " 秒）");
+    mp4.setRecordingDuration(seconds);
+    playPrompt("init.wav");
+    mp4.begin();
+    stopArmed = false;    // 按鈕若還被按著,放開後才 arm「再按一下停止」
+}
+
+// ================= 本地聲音事件偵測(NPU / YAMNet) =================
+
+#if ENABLE_SOUND_DETECTION
+
+#define SND_LIST_LEN(a) (sizeof(a) / sizeof((a)[0]))
+#define YAMNET_CLASS_COUNT 521
+
+static bool inClassList(int classId, const int *list, size_t n)
+{
+    for (size_t i = 0; i < n; i++) {
+        if (list[i] == classId) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// class id → 「名稱(編號)」,只給 log 用。門檻與白名單都是靠實機看這行調的,
+// 所以寧可多印:每一筆進了白名單的偵測都會留下痕跡。
+String soundClassName(int classId)
+{
+    if (classId < 0 || classId >= YAMNET_CLASS_COUNT) {
+        return "class#" + String(classId);
+    }
+    return String(audioNames[classId].audioName) + "(" + String(classId) + ")";
+}
+
+// NPU 推論完成的 callback。**跑在 vipnn 的執行緒上,不是主迴圈**——
+// 這裡只准做「比對 + 設旗標」,任何會阻塞的事(播音、開錄音、HTTPS)都會拖垮
+// 整條音訊管線,連帶讓錄音掉幀。實際動作在 pumpSoundDetection()。
+void onAudioClassified(std::vector<AudioClassificationResult> results)
+{
+    if (speakerActive || millis() < soundGateUntil) {
+        return;    // 正在(或剛剛)播自己的聲音,這批結果不可信
+    }
+
+    // 診斷模式:原樣抄下前幾名(主迴圈負責印,這裡一樣不做 I/O)
+    if (soundDebug && !debugPending) {
+        int n = (int)results.size();
+        if (n > SND_DEBUG_SLOTS) {
+            n = SND_DEBUG_SLOTS;
+        }
+        for (int i = 0; i < n; i++) {
+            debugClass[i] = results[i].classID();
+            debugScore[i] = results[i].score();
+        }
+        debugCount = n;
+        debugPending = true;
+    }
+
+    for (size_t i = 0; i < results.size(); i++) {
+        int classId = results[i].classID();
+        int score = results[i].score();    // prob * 100
+
+        if (score >= distressScoreThreshold
+            && inClassList(classId, distressClasses, SND_LIST_LEN(distressClasses))) {
+            pendingDistressClass = classId;
+            pendingDistressScore = score;
+            distressPending = true;
+        } else if (score >= impactScoreThreshold
+                   && inClassList(classId, impactClasses, SND_LIST_LEN(impactClasses))) {
+            pendingImpactClass = classId;
+            pendingImpactScore = score;
+            // 佐證窗從「聲音發生的當下」起算,不是從主迴圈注意到的當下——
+            // 主迴圈可能正卡在 ASR 上傳裡好幾十秒。
+            lastImpactAt = millis();
+            impactPending = true;
+        }
+    }
+}
+
+// 撞擊佐證窗還開著嗎?未來 Himax 視覺跌倒推論接上來時,這就是它的第二個訊號源:
+// 「畫面看起來像跌倒」＋「剛剛有重物落地聲」比任一單獨訊號可信得多。
+bool recentImpact()
+{
+    return lastImpactAt != 0 && (millis() - lastImpactAt) <= impactCorroborationMs;
+}
+
+// 主迴圈端:消化 callback 留下的旗標。
+void pumpSoundDetection()
+{
+    if (debugPending) {
+        String line = "[SND] (raw)";
+        // res_cnt 為 0 是正常的:YAMNet 只回報超過它自己內部信心門檻的類別,
+        // 安靜的房間常常一個都不回。仍然印一行,因為「有在跑」本身就是要看的資訊。
+        if (debugCount == 0) {
+            line += "  —（無結果，多半是安靜）";
+        }
+        for (int i = 0; i < debugCount; i++) {
+            line += "  " + soundClassName(debugClass[i]) + "=" + String(debugScore[i]);
+        }
+        Serial.println(line);
+        debugPending = false;    // 印完才放行下一批,避免洗版蓋掉還沒印的
+    }
+
+    if (impactPending) {
+        impactPending = false;
+        Serial.println("[SND] 💥 撞擊聲 " + soundClassName(pendingImpactClass)
+                       + " score=" + String(pendingImpactScore) + " → 開啟 "
+                       + String(impactCorroborationMs / 1000) + " 秒佐證窗（**不單獨上報**）");
+    }
+
+    if (!distressPending) {
+        return;
+    }
+    distressPending = false;
+    Serial.println("[SND] 🆘 求救聲 " + soundClassName(pendingDistressClass)
+                   + " score=" + String(pendingDistressScore));
+
+    if (recordingstate == 1) {
+        Serial.println("[SND] 已在錄音中 → 略過（這段聲音本來就會被錄進去送 ASR）");
+        return;
+    }
+    if (lastSoundWakeAt != 0 && millis() - lastSoundWakeAt < soundWakeCooldownMs) {
+        Serial.println("[SND] 冷卻中（距上次聲音喚醒 "
+                       + String((millis() - lastSoundWakeAt) / 1000) + " 秒）→ 略過");
+        return;
+    }
+    lastSoundWakeAt = millis();
+
+    if (recentImpact()) {
+        // 撞擊 + 求救 = 兩個彼此獨立的訊號指向同一件事,信心足夠直接送跌倒事件,
+        // 由雲端接手 20 秒升級階梯(CLAUDE.md 約束 3)。這裡刻意不先錄音問話:
+        // 摔在地上的人可能已經講不出完整句子,多花 8 秒錄音只是延後派工。
+        Serial.println("[SND] ⚠️ 佐證窗內先有撞擊聲 → 判定疑似跌倒,上報 fall_suspected");
+        lastImpactAt = 0;    // 用掉就關窗,同一次撞擊不重複佐證
+        sendEvent("fall_suspected");
+        return;
+    }
+
+    // 只有求救聲(沒有撞擊):可能是跌倒,也可能是「我不舒服」「我想買東西」。
+    // 走與長按按鈕完全相同的喚醒錄音流程,讓長輩把話講完,交給雲端分類。
+    startRecording(wakeRecordSeconds, "聲音喚醒");
+}
+
+#endif    // ENABLE_SOUND_DETECTION
 
 // ================= 上行 POST /voice =================
 
@@ -1187,28 +1637,142 @@ void playFromPath(const String &audioPath)
     }
 
     Serial.println("[Play] streaming...");
+    speakerOutputBegin();
     if (amp.playWavStream(client)) {
         Serial.println("[Play] done.");
     } else {
         Serial.print("[Play] failed: ");
         Serial.println(amp.lastError());
     }
+    speakerOutputEnd();
     client.stop();
 }
 
-// 播一句話。lang 是「選語音」的旗標(mandarin/taigi),text 一律是正常中文——
-// 雲端不做台語翻譯,台語是由裝置端 TTS 把同一份中文念成台語(契約 §3②)。
+// 讀 Polly 回應的標頭:回傳 HTTP 狀態碼(-1 = 標頭沒讀完),並把是否為
+// chunked 寫回 outChunked。
 //
-// ⚠️ 現況:目前接的 ATEN TTS 只有一種語音,lang=taigi 會被念成國語。
-// 這是「台語播報能否落地」的關鍵未決項(見 hardware-integration.md 交接清單),
-// 所以這裡不靜默忽略、而是明確 log 出來,換到支援台語的 TTS 時只要改 requestTTS。
+// 為什麼要特地判 chunked:接下來要把同一個 client 直接餵給 amp.playWavStream(),
+// 而它不懂 chunked 的十六進位長度框架行,會把框架當成音訊取樣播出去 → 雜音。
+// (ATEN 那條路不會踩到,因為它是先收完 JSON、再開第二條連線抓音檔。)
+static int readPollyHeaders(WiFiSSLClient &c, bool &outChunked, uint32_t timeoutMs)
+{
+    String line = "";
+    int status = 0;
+    bool first = true;
+    outChunked = false;
+    uint32_t t0 = millis();
+
+    while (millis() - t0 < timeoutMs) {
+        while (c.available()) {
+            char ch = c.read();
+            if (ch == '\n') {
+                if (line.length() == 0) {
+                    return status;    // 空行 = 標頭結束
+                }
+                if (first) {
+                    int sp = line.indexOf(' ');    // "HTTP/1.1 200 OK"
+                    if (sp > 0) {
+                        status = line.substring(sp + 1, sp + 4).toInt();
+                    }
+                    first = false;
+                } else {
+                    String low = line;
+                    low.toLowerCase();
+                    if (low.startsWith("transfer-encoding:") && low.indexOf("chunked") > 0) {
+                        outChunked = true;
+                    }
+                }
+                line = "";
+            } else if (ch != '\r') {
+                line += ch;
+            }
+        }
+        if (!c.connected() && !c.available()) {
+            break;
+        }
+        delay(1);
+    }
+    return -1;
+}
+
+// 國語:POST 文字給 jinsun-tts(Polly),回應本身就是 WAV → 收完標頭直接串流播放。
+// 回傳 true 表示確實出過聲,false 讓呼叫端決定要不要退回 ATEN。
+bool speakViaPolly(const String &text)
+{
+    WiFiSSLClient client;
+
+    Serial.println("[TTS] 國語 → Polly https://" + String(tts_mandarin_server) + tts_mandarin_path);
+    if (!client.connect(tts_mandarin_server, 443)) {
+        Serial.println("[TTS] Polly 連線失敗");
+        return false;
+    }
+
+    JsonDocument doc;
+    doc["text"] = text;
+    doc["lang"] = "mandarin";
+    String body;
+    serializeJson(doc, body);
+
+    client.println("POST " + tts_mandarin_path + " HTTP/1.1");
+    client.println("Host: " + String(tts_mandarin_server));
+    client.println("Content-Type: application/json");
+    client.println("Accept: audio/wav");
+    client.println("Content-Length: " + String(body.length()));
+    client.println("Connection: close");
+    client.println();
+    client.print(body);
+    client.flush();
+
+    bool chunked = false;
+    int code = readPollyHeaders(client, chunked, 20000);
+    if (code != 200) {
+        Serial.println("[TTS] Polly HTTP " + String(code));
+        client.stop();
+        return false;
+    }
+    if (chunked) {
+        // 2026-08-01 實測正式端點:回 `content-length: 142444`、沒有 transfer-encoding,
+        // 所以正常情況走不到這裡。真踩到就得改成「先整段收進記憶體、剝掉框架再播」。
+        Serial.println("[TTS] ⚠️ Polly 回 chunked,playWavStream 吃不下");
+        client.stop();
+        return false;
+    }
+
+    Serial.println("[Play] Polly streaming...");
+    speakerOutputBegin();
+    bool ok = amp.playWavStream(client);
+    speakerOutputEnd();
+    client.stop();
+
+    if (ok) {
+        Serial.println("[Play] done.");
+    } else {
+        Serial.print("[Play] Polly 播放失敗: ");
+        Serial.println(amp.lastError());
+    }
+    return ok;
+}
+
+// 播一句話。lang 是「選語音」的旗標(mandarin/taigi),text 一律是正常中文——
+// 雲端不做台語翻譯,兩種語言拿到的是同一份中文,差別只在送去哪顆 TTS(契約 §3②):
+//
+//   lang=taigi    → ATEN(台語模型,端點不吃 voice 參數,只會講台語)
+//   lang=mandarin → Polly Zhiyu(jinsun-tts Lambda)
+//
+// Polly 掛掉時退回 ATEN 用台語念:這條路上跑的是派遣進度與安撫語句,
+// 長輩聽到「語言不對的一句話」遠好過聽到一片安靜。
 void speak(const String &text, const String &lang)
 {
     lastSpokenText = text;    // 供 repeat 指令重播
     lastSpokenLang = lang;
-    if (lang == "taigi") {
-        Serial.println("[TTS] ⚠️ 要求台語,但目前 TTS 服務只有國語語音 → 先用國語念");
+
+    if (lang != "taigi") {
+        if (speakViaPolly(text)) {
+            return;
+        }
+        Serial.println("[TTS] ⚠️ 國語 TTS 不可用 → 退回 ATEN(這句會變成台語)");
     }
+
     String audioPath = requestTTS(text);
     if (audioPath.length() > 0) {
         playFromPath(audioPath);
@@ -1253,6 +1817,7 @@ void playChime(bool ok)
     if (!amp.beginPCM(16000, 1)) {
         return;
     }
+    speakerOutputBegin();
     if (ok) {
         writeTone(880, 120, 0.5f);
         writeTone(0, 40, 0.0f);
@@ -1263,5 +1828,6 @@ void playChime(bool ok)
             writeTone(0, 100, 0.0f);
         }
     }
+    speakerOutputEnd();
     amp.endPCM();
 }

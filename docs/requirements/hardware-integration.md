@@ -23,13 +23,49 @@ RTL8735B 內建 WiFi + BLE 5.1，Ameba SDK 有 `BLEWifiConfig` 範例。實測�
   再把**文字**送 `POST /voice`。`/voice` 契約不變、仍只收文字；語音 Agent server 不收音檔。
   隱私邊界＝`CLAUDE.md` 約束 1：**只有主動觸發那段語音上雲**，日常聲音與影像不上傳。
   （device-side STT 改列未來隱私強化方向。）
-- **觸發方式**：**按住按鈕 2 秒**開始錄音、再按一下結束；另有**聲音事件喚醒**——裝置本地 NPU 音訊分類
-  偵測到呼救/哭聲/尖叫（distress 類）即觸發同一條喚醒錄音流程（取代原音量門檻；撞擊類聲音**僅佐證視覺跌倒、
-  絕不單獨觸發**；模型不可用時退回音量門檻，開機 log 標明目前喚醒模式）。「小金孫」喚醒詞＋**離線急救詞**
-  「救命」（聽到就先亮燈/響鈴並以 `event:"sos"` 上報，不依賴網路）為待辦；不依賴網路的求救以實體 SOS 鍵為主。
-- **TTS 在雲端**：裝置把要念的文字 POST 給 TTS 服務（現用 ATEN 語音，回 WAV URL 後串流播放）。
-  下行 `speak` 帶 `lang`（`mandarin`/`taigi`），`text` 一律漢字（台語也是），裝置依 `lang` 轉送對應 TTS 語音。
-  ⚠️ **台語語音要看 TTS 服務支不支援**——請韌體端確認，這是台語播報能否落地的關鍵。
+- **觸發方式**：**按住按鈕 2 秒**開始錄音、再按一下結束；另有**聲音事件喚醒（✅ 已實作）**——裝置本地 NPU
+  音訊分類（YAMNet，`NNAudioClassification` + `DEFAULT_YAMNET`）偵測到呼救/哭聲/尖叫（distress 類）
+  即觸發同一條喚醒錄音流程（錄 8 秒後自動收工，因為沒有人會來按第二下）。撞擊類聲音**絕不單獨觸發**，
+  只把 `lastImpactAt` 記下來開一扇 3 秒佐證窗；窗內若再聽到 distress 才判定高信心跌倒、
+  直接送 `event:"fall_suspected"`（跳過問診——摔在地上的人可能已經講不出完整句子）。
+  `recentImpact()` 也預留給之後的視覺跌倒推論當第二訊號源。開機 log（`[SND] 喚醒模式：…`）標明目前模式與門檻。
+  ⚠️ 未做：**模型載入失敗時退回音量門檻**——`NNAudioClassification::begin()` 回傳 void、SDK 也沒有
+  查詢載入結果的 API，目前只能靠編譯期的 `ENABLE_SOUND_DETECTION` 開關切回純按鈕模式。
+  「小金孫」喚醒詞＋**離線急救詞**「救命」（聽到就先亮燈/響鈴並以 `event:"sos"` 上報，不依賴網路）
+  仍為待辦——YAMNet 是**聲音場景分類器、不是關鍵字辨識器**，它分得出「有人在大聲喊」但分不出喊的是什麼字；
+  不依賴網路的求救以實體 SOS 鍵為主。
+- **TTS 在雲端，且依 `lang` 分流到兩顆服務**（✅ 已實作）。下行 `speak` 帶 `lang`（`mandarin`/`taigi`），
+  `text` 一律漢字（台語也是），裝置依 `lang` 選 TTS：
+
+  | `lang` | 服務 | 回應形式 |
+  |---|---|---|
+  | `taigi` | **ATEN**（`kws.oaselab.org`）——**台語模型** | JSON `{status,url}` → 第二條連線抓 WAV 串流播放 |
+  | `mandarin` | **Amazon Polly**（Zhiyu，`jinsun-tts` Lambda，`POST /tts`） | 帶 `Accept: audio/wav` → 直接回 WAV bytes，POST 完就邊收邊播 |
+
+  `POST /tts` 同一條路由服務兩種呼叫者，靠 `Accept` 分辨：韌體帶 `audio/wav` 拿二進位；
+  長輩端網頁版不帶，拿回 `{status,url}`（`url` 是 `data:audio/mpeg;base64,…`），
+  沿用它原本打 Render `/tts` 的介面，前端不用改。
+
+  **2026-08-01 已部署並上板實測通過**（`https://yr0ep335el.execute-api.us-west-2.amazonaws.com/tts`）：
+  23 字 →`content-length: 142444`、**沒有 `transfer-encoding: chunked`**（韌體直接串流成立的前提）、
+  4.45 秒 16kHz mono WAV，`amp.playWavStream()` 實機播放正常。
+  Lambda 冷啟 329 ms／熱 225 ms／快取命中 3 ms，Polly neural 一次就過。
+  同一句給瀏覽器的 mp3 是 27 KB（wav 的 1/5.3）。
+
+  ⚠️ **Polly 的原始輸出偏小聲**（實測峰值只到 −10.0 dBFS、RMS −22.7），上板聽就是「有點小聲」。
+  修法是在 Lambda 做**峰值正規化**到 −1 dBFS（`normalizePcm()`，實測 +9.0 dB、零削頂、
+  長度不變所以語速語氣沒動）。**刻意不從韌體的 `ampVolume` 調**：它預設 0.8、上限 1.0，
+  只剩 1.9 dB 可補，而且一調就連 ATEN（台語）也一起變大聲。
+  目標值可用環境變數 `TTS_PEAK_DBFS`（預設 −1）與 `TTS_MAX_GAIN_DB`（預設 12）改。
+  mp3（瀏覽器）那條不正規化——拿回來已是編碼後資料，且瀏覽器本來就有音量可調。
+  ⚠️ AWS 這側**沒有台語 TTS**（Render 那台的 `/tts` 有代打 ATEN，這裡沒有），
+  `lang=taigi` 回 404 讓網頁版整個 session 退回瀏覽器語音。裝置端不受影響——它自己直連 ATEN。
+
+  ⚠️ **ATEN 那顆端點不吃 voice/lang 參數**（已確認），它只會講台語——所以國語一定得另一顆服務，
+  這就是 Polly 那條路存在的原因。Polly 不可用時退回 ATEN（寧可語言不對也不要安靜），序列埠會印
+  `[TTS] ⚠️ 國語 TTS 不可用 → 退回 ATEN`。
+  Polly 端點刻意不隨 `BACKEND_AWS` 切換：TTS 是無狀態服務呼叫、沒有資料落地，
+  與 ASR gateway 一樣兩套環境共用，不違反「不共用資料庫」。
 - ASR／TTS 服務選型可抽換（.ino 開頭常數），不影響下列任何 API 契約。
 
 ## 2. 家屬 App 藍牙配網（BLE Provisioning）
@@ -108,7 +144,9 @@ Let's Encrypt 在系統信任清單內、不需附 CA 檔；topic／payload 契�
 ```
 裝置收到後逐一執行：`speak` → 文字送 TTS 服務 → 串流播放；`device` → 執行指令。
 
-> **`text` 一律是正常中文（國語書寫），雲端不做台語翻譯。** 台語由**裝置端 TTS 依 `lang` 自行把中文念成台語**（`lang` 只是選語音的旗標，不改變文字內容）。所以同一句 `text` 不論 `lang` 是 `mandarin` 或 `taigi` 都相同；`reply`（上行 `POST /voice` 的回覆）也同此規則。韌體端請確保台語語音引擎吃得下正常中文輸入。
+> **`text` 一律是正常中文（國語書寫），雲端不做台語翻譯。** 台語由**裝置端 TTS 依 `lang` 自行把中文念成台語**（`lang` 只是選語音的旗標，不改變文字內容）。所以同一句 `text` 不論 `lang` 是 `mandarin` 或 `taigi` 都相同；`reply`（上行 `POST /voice` 的回覆）也同此規則。
+>
+> ✅ **已聽過確認：ATEN 台語 TTS 餵國語書寫念得出來、沒問題。** 這條原本是有風險的假設——台語 TTS 通常期待台文漢字或台羅（「雞蛋」台文寫作「雞卵」），餵國語書寫有可能念得生硬。實聽後確認可行，所以**雲端維持不做台語翻譯**、`jinsun-voice` 的 prompt 不用為 `lang` 分岔，`text` 兩種語言共用一份。
 
 連線參數：client id ＝ `device_serial`；**QoS 1**（至少送達一次，斷線重連後 broker 補投）；keep-alive 30s；
 斷線**指數退避重連**（1s→2s→…上限 30s），重連後重新 subscribe。
@@ -118,6 +156,16 @@ Let's Encrypt 在系統信任清單內、不需附 CA 檔；topic／payload 契�
 （2026-07-26 實測 mqttgo.io 支援持久 session：斷線期間 publish 的 QoS 1 訊息，重連後 `sessionPresent=true` 並確實補投。）
 **上下線偵測**：連上時 publish `jinsun/{serial}/status` = `online`，並設 Last Will 同 topic = `offline`
 ——broker 偵測到斷線自動發布，後台「裝置離線」顯示免費取得，不需要另做心跳。
+
+⚠️ **這則 status publish 走 QoS 0、且不得帶 RETAIN**（2026-08-01 實測踩到，別再「順手改成 QoS 1」）。
+上面那句「QoS 1」指的是**下行指令的 subscribe**，不是這則 status。在 AmebaPro2 的 PubSubClient 上
+呼叫 `setPublishQos(1)` 會**打開 RETAIN 旗標而不是設 QoS 1**（該 API 收的是已位移的 `MQTTQOS1`＝2，
+而實作 `header |= pub_qos` 的 bit 0 正好是 RETAIN），而 AWS IoT 對保留訊息要求額外的
+`iot:RetainPublish` 權限 → 被拒 → **IoT Core 在 CONNECT 成功後約 500ms 直接關閉連線、不回任何錯誤碼**，
+症狀是無限重連且所有 Thing／憑證／policy 都查不出問題。完整分析見
+[`firmware/HUB-8735-Ultra-ASR-TTS/README.md`](../../firmware/HUB-8735-Ultra-ASR-TTS/README.md) 的
+「MQTT 一直重連」。可靠性不受影響：離線由 LWT 負責，需要保證投遞的下行指令靠 subscribe QoS 1 ＋
+`cleanSession=false`。
 
 > 為什麼是 MQTT 而不是裝置開 HTTP callback server：MQTT 是裝置**主動向外連 broker 並保持連線**，
 > 雲端 push 走這條既有連線——裝置在家用 NAT 後面也收得到，不需要可被公網存取；
@@ -223,8 +271,9 @@ BACKEND_AWS 1   BASE_URL=https://yr0ep335el.execute-api.us-west-2.amazonaws.com
    8883 才是這塊板子唯一可行的路。
 
 **兩套環境不共用資料庫**，切過去之後事件只會出現在 AWS 那三端網址上。接手前先讀
-[`aws-handoff.md`](aws-handoff.md)。ASR／TTS 兩邊共用同一組雲端服務（AWS 版的 Transcribe
-Lambda 尚未做），所以只有上面這兩個端點會變。
+[`aws-handoff.md`](aws-handoff.md)。ASR／TTS 兩邊共用同一組雲端服務（ASR 走 XCC gateway；
+TTS 台語走 ATEN、國語走 `jinsun-tts` Lambda——後者雖然跑在 AWS 上，但兩套環境都打它，
+理由見 §1），所以只有上面這兩個端點會變。
 
 ## 交接清單（韌體端 TODO）
 - [x] 語音 pipeline 實機跑通：按鈕錄音 → 雲端 ASR → LLM → 雲端 TTS → 播放（`HUB-8735-Ultra-ASR-TTS.ino`）
@@ -236,9 +285,25 @@ Lambda 尚未做），所以只有上面這兩個端點會變。
       編譯通過（28% flash）；以 MQTT client 複刻韌體行為對正式站跑通「`POST /voice` → 問診 →
       逾時階梯 3 則 speak 從 mqttgo.io 收到」，`reply`/`intent`/`action`/`lang` 四個欄位齊備。
       仍待上板確認的是 TLS 握手、音訊播放與長時間連線穩定度）
-- [ ] 本地感知層（change `add-local-perception`）：視訊管線＋YOLO 跌倒偵測、舉手求救（TTS 確認倒數）、活動統計（`activity_report`/`inactivity_suspected` 上行）、NPU 音訊分類喚醒——全部本地推論、僅事件上行；各模型載入失敗獨立降級、序列埠 `fall`/`sos` 保留
+- [ ] 本地感知層（change `add-local-perception`）：視訊管線＋YOLO 跌倒偵測、舉手求救（TTS 確認倒數）、活動統計（`activity_report`/`inactivity_suspected` 上行）——全部本地推論、僅事件上行；各模型載入失敗獨立降級、序列埠 `fall`/`sos` 保留
+  - [x] **NPU 音訊分類喚醒**（YAMNet）：distress → 喚醒錄音、impact → 3 秒佐證窗（不單獨上報）、
+        `impact + distress` → `fall_suspected`；喇叭出聲期間關閉偵測（否則裝置會被自己的 TTS 喚醒、無限循環）；
+        序列埠 `bang`/`shout`/`sndreset` 可不靠實際聲響驗證判斷邏輯。編譯通過（84% flash，見下方 ⚠️）
+  - ⚠️ **flash 用量從 28% 跳到 84%**：`yamnet_fp16.nb` 單一個模型就 8.7 MB。之後要加 YOLO 跌倒偵測
+        （`yolov4_tiny.nb` 4.1 MB / `yolov7_tiny.nb` 4.7 MB）**幾乎確定塞不下**，屆時的逃生口是
+        `variants/common_nn_models/yamnet_s_hybrid.nb`（只有 320 KB，SDK 內部符號 `yamnet_s`）——
+        但 Arduino 包裝層的 `NNAudioClassification::begin()` 把 `&yamnet`（fp16）寫死了，
+        要用小模型得繞過它直接呼叫 `vipnn_control(CMD_VIPNN_SET_MODEL, &yamnet_s)`，尚未驗證
 - [ ] BLE 配網：跑通 `BLEWifiConfig` → 照第 2 節契約複刻（含回報 serial）；移除硬編碼的 WiFi 密碼與 API key
-- [ ] 離線喚醒詞（小金孫）+ 急救詞（救命）——現況為按鈕觸發
-- [ ] **TTS 台語能力確認**（決定 `lang=taigi` 能否真的發台語音）
+- [ ] 離線喚醒詞（小金孫）+ 急救詞（救命）——現況為按鈕觸發＋聲音事件喚醒。
+      YAMNet 補不上這一項：它分得出「有人在大聲喊」，分不出喊的是哪幾個字，
+      真正的關鍵字辨識要另外訓練 KWS 模型（而 flash 已經只剩 16%，見上）
+- [x] **雙語播報落地**：ATEN（`kws.oaselab.org`）**本來就是台語模型**，所以 `lang=taigi`
+      一直是對的；反而是**國語**沒有服務（該端點不吃 voice/lang 參數，只會講台語）。
+      已補 `jinsun-tts` Lambda（Amazon Polly Zhiyu）走 `lang=mandarin`，`speak()` 依 lang 分流。
+      **台語餵國語書寫已實聽確認可行** → 契約 §3② 維持「雲端不做台語翻譯」不變
+- [x] **上板聽 Polly 那條路**：`amp.playWavStream()` 實機播放正常。
+      初次實聽偏小聲 → 已在 Lambda 端做峰值正規化（+9.0 dB，見 §1）。
+      失敗會退回 ATEN 講台語，序列埠印 `[TTS] ⚠️ 國語 TTS 不可用 → 退回 ATEN`
 - [ ] `BASE_URL` 可設定；`device_serial` 固定並於配網回報
 - [ ] 用第 5 節對測一輪，再上實機

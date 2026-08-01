@@ -26,6 +26,10 @@ cloud/aws/
 │   ├── voice/      POST /voice —— 沿用 cloud/prototype/src 的六個 agent，
 │   │               只把 Emergency 的行程內 setTimeout 換成 Step Functions
 │   ├── speak/      下發一句話到 IoT Core（Step Functions 的「說話」步驟）
+│   ├── tts/        POST /tts —— 國語 TTS（Amazon Polly Zhiyu）。靠 Accept 分兩種回應：
+│   │               韌體帶 audio/wav → WAV bytes；網頁版不帶 → {status,url}（data: URI）。
+│   │               台語不走這裡：ATEN 那顆本來就是台語模型（且不吃 voice 參數），
+│   │               裝置端依 speak 的 lang 分流。兩套環境共用（無狀態服務）
 │   ├── progress/   進度播報 —— progress.js 的 AWS 版
 │   ├── data/       三端 App 的資料 API（取代 Supabase PostgREST + Realtime）
 │   │   ├── index.mjs   /data/version（變更指紋）、/data/snapshot、/data/mutate
@@ -37,10 +41,11 @@ cloud/aws/
 │   └── enroute-broadcast.asl.json    路上每 10 分鐘（取代 setInterval）
 ├── iot/device-policy.json            裝置只能碰自己的 topic
 └── scripts/
-    ├── build.sh                      打包五支 Lambda
+    ├── build.sh                      打包六支 Lambda
     ├── set-lambda-env.mjs            把 .env 裡的機密併進 Lambda 環境變數
     ├── setup-cognito.sh              User Pool + 三個 Group + App Client + 觸發器
-    └── deploy-data.sh                jinsun-data + API 路由 + JWT authorizer + 照片 bucket
+    ├── deploy-data.sh                jinsun-data + API 路由 + JWT authorizer + 照片 bucket
+    └── deploy-tts.sh                 jinsun-tts + POST /tts 路由 + Polly 權限
 ```
 
 **Lambda handler 不重複實作商業邏輯**——直接 import `cloud/prototype/src` 的

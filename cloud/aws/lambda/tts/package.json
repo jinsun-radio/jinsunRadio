@@ -1,0 +1,8 @@
+{
+  "name": "jinsun-tts",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-polly": "^3.1101.0"
+  }
+}

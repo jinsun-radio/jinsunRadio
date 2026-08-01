@@ -56,7 +56,7 @@ flowchart LR
   subgraph AI["AI 層"]
     ASR["Amazon Transcribe（國語）<br/>+ SageMaker Endpoint<br/>Breeze-ASR（台語）"]
     BR["Amazon Bedrock<br/>Claude Sonnet 4.6 / Haiku 4.5<br/>+ Guardrails"]
-    TTS["Amazon Polly（國語）<br/>+ SageMaker TTS（台語）"]
+    TTS["Amazon Polly Zhiyu（國語）<br/>+ ATEN（台語，外部）"]
     SM["SageMaker AI<br/>跌倒模型訓練→量化→下發韌體"]
   end
 
@@ -228,8 +228,8 @@ flowchart TB
 
 | AWS 服務 | 實際資源 | 用在什麼地方 |
 |---|---|---|
-| **API Gateway**（HTTP API） | `jinsun-voice-api` / `yr0ep335el` | 唯一的 HTTPS 入口。6 條路由：`$default`→語音（含 `POST /voice`、`POST /asr`、`GET /health`、`GET /commands`）、`POST /hooks/progress`→進度、`/data/{version,snapshot,mutate,timebank}`→資料 API（掛 JWT authorizer）。`/asr` 沒有獨立路由也**沒有 JWT authorizer**——它落在 `$default` 上，長輩端是裝置身分，不該為了轉一句逐字稿去換 token |
-| **Lambda** ×5 | `jinsun-voice` `jinsun-data` `jinsun-progress` `jinsun-speak` `jinsun-auth` | 全部商業邏輯。`voice` 跑六個 Agent；`data` 是三端資料 API＋角色授權；`progress` 播報去重；`speak` 只做「publish 一句話到 IoT」；`auth` 是 Cognito 觸發器 |
+| **API Gateway**（HTTP API） | `jinsun-voice-api` / `yr0ep335el` | 唯一的 HTTPS 入口。8 條路由：`$default`→語音（含 `POST /voice`、`POST /asr`、`GET /health`、`GET /commands`）、`POST /hooks/progress`→進度、`/data/{version,snapshot,mutate,timebank}`→資料 API（掛 JWT authorizer）、`POST /tts`＋`OPTIONS /tts`→國語 TTS（**無 authorizer**，同 `/asr` 的理由）。`/asr` 沒有獨立路由也**沒有 JWT authorizer**——它落在 `$default` 上，長輩端是裝置身分，不該為了轉一句逐字稿去換 token |
+| **Lambda** ×6 | `jinsun-voice` `jinsun-data` `jinsun-progress` `jinsun-speak` `jinsun-auth` `jinsun-tts` | 全部商業邏輯。`voice` 跑六個 Agent；`data` 是三端資料 API＋角色授權；`progress` 播報去重；`speak` 只做「publish 一句話到 IoT」；`auth` 是 Cognito 觸發器；`tts` 是國語語音合成（Polly Zhiyu，唯一一支兩套環境共用的） |
 | **Step Functions** ×2 | `JinsunEmergencyLadder`、`JinsunEnrouteBroadcast` | **黃金 20 秒鏈路**。取代原本行程內的 `setTimeout`／`setInterval`——行程重啟也不會漏升級。用絕對時間戳而非相對 `Wait`（相對會累積開銷，實測超窗到 21.55s） |
 | **IoT Core** | Thing `JS-0001`／`JS-REAL-0001`、policy `JinsunDevicePolicy` | 下行指令 push（`jinsun/{serial}/cmd`）、裝置上下線 LWT。X.509 雙向 TLS，取代正式環境那顆無認證的公共 broker |
 | **Aurora Serverless v2** | `jinsun-aurora`、PG 16.14、Data API、0.5–4 ACU | 唯一的關聯式資料庫，與正式環境 Supabase **完全斷開**。走 Data API 所以 Lambda 不必進 VPC。最小容量刻意設 0.5 而非 0（從零擴容約 15 秒，會吃掉黃金窗） |
@@ -422,7 +422,7 @@ sequenceDiagram
 | 目標圖上有 | 現況 |
 |---|---|
 | Transcribe（國語 ASR） | **沒用**。國語 ASR 走外部 XCC Gateway：韌體直接打，長輩端網頁版則經 `jinsun-voice` 的 `POST /asr` 代理（金鑰不進前端封包）。刻意不換 Transcribe——它沒有台語，而這條是長輩唯一的輸入方式 |
-| Polly（國語 TTS） | **沒用**。TTS 走外部 `kws.oaselab.org` |
+| Polly（國語 TTS） | ✅ **已接**（`jinsun-tts` Lambda，`POST /tts`，Zhiyu neural → WAV）。台語仍走外部 `kws.oaselab.org`（ATEN 是台語模型，Polly 沒有閩南語音色），裝置端依 `speak.lang` 分流 |
 | SageMaker 台語 ASR | endpoint 已 InService，**但未接線**（缺 SigV4 proxy） |
 | SageMaker 跌倒模型訓練 → OTA | **沒做**。跌倒視覺推論本身尚未實作 |
 | AppSync GraphQL Subscription | **沒建**。改用 `/data/version` 變更指紋輪詢（每 3 秒），取捨理由見 §4.4 |
@@ -447,7 +447,7 @@ sequenceDiagram
 | `travel.js`（demo 志工移動模擬） | **EventBridge Scheduler + Lambda** | 低 | 每 N 秒觸發一次寫座標，demo 專用 |
 | LLM（XCC Gateway） | **Amazon Bedrock**（Claude Sonnet 4.6 / Haiku 4.5，實測可用） | **極低** | `llm/bedrock.js` 已經寫好 provider 切換，改 `LLM_PROVIDER=bedrock` 即可；見 §5.1 |
 | ASR（Breeze-ASR via XCC） | **Transcribe（zh-TW）＋ SageMaker Endpoint（台語 Breeze-ASR）** | 中 | 見 §5.2 |
-| TTS（XCC） | **Amazon Polly（國語）＋ SageMaker（台語）** | 中 | Polly 無台語音色；台語仍需自架模型或留在裝置端 |
+| TTS（ATEN，台語） | **Amazon Polly（國語）＋ ATEN 續留（台語）** | ✅ **已完成** | ATEN 是台語模型且端點不吃 voice 參數，換不了國語 → 補 `jinsun-tts`（Polly Zhiyu）走 `lang=mandarin`。Polly 無閩南語音色，台語沒有理由搬 |
 | Edge Function `whisper`（App 聊天語音） | **API Gateway + Lambda → Transcribe** | 低 | 金鑰改用 IAM role，不再需要代理外部 API key |
 | Edge Function `send-push` → FCM | **SNS Mobile Push（Platform Application: APNs + FCM）** | 中 | 由 EventBridge 規則觸發 Lambda 決定收件者，再 `sns:Publish` 到 endpoint／topic |
 

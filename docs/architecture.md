@@ -30,12 +30,12 @@
 長輩不需要學習操作任何 App，收音機本身就是完整的互動介面：
 
 - **相機＋ML model**：偵測跌倒／久臥等異常姿態，模型跑在裝置端，畫面不外傳（規劃中，尚未實作）
-- **麥克風**：偵測「救命」等關鍵字與異常沉默（關鍵字偵測規劃中；**現況以實體按鈕觸發收音**）
+- **麥克風**：**本地 NPU 音訊分類（YAMNet，已實作）**——聽到呼救／尖叫／呻吟（distress 類）即自動開始錄音，長輩喊得出聲但按不到按鈕時也能求救；聽到撞擊／摔落聲則開一扇 3 秒「佐證窗」，**撞擊聲絕不單獨上報**（關門、放鍋子都會觸發，每次誤報都是一張志工派遣單），窗內若再聽到呼救才判定疑似跌倒。推論全程在裝置 NPU 上跑，**音訊不外傳**。「小金孫」喚醒詞與異常沉默偵測仍規劃中；實體按鈕是不依賴任何模型的最終退路
 - **語音播報（TTS）**：詢問「你有沒有撞到？」、告知「已經幫你叫人，預計 6 分鐘內到」等安撫與狀態回報
 - **SOS 實體按鈕**：一按直接觸發求助流程
 - **主動代辦語音**：長輩可直接跟收音機說想要的物資（如「我想買牛奶跟雞蛋」），這段語音才會上傳雲端；其餘時間（吃藥提醒、日常監測）都在本地端處理，長輩不會覺得被監視
 
-隱私設計的關鍵邊界：**影像永不外傳**（跌倒推論在裝置本地完成），語音只有長輩**主動觸發**的段落會上雲做 ASR（對應架構約束 1）。裝置↔雲端只送事件與文字：上行走 HTTPS `POST /voice`，下行**定案走 MQTT push**。實測韌體（`firmware/HUB-8735-Ultra-ASR-TTS.ino`）**上下行都已接上契約**：上行打部署於 Render 的語音 Agent server（`https://jinsun-voice-server-mg1f.onrender.com/voice`），下行以 PubSubClient 訂閱 `jinsun/{serial}/cmd`（QoS 1、LWT 上下線、指數退避重連）。broker 佈署有三種型態：本機開發＝server 內嵌 aedes；**Render 部署＝server 與裝置各自連同一顆外部 broker 會合**（server 設 `MQTT_URL`，因 PaaS 只對外開 HTTPS、內嵌 broker 進不來）；正式＝AWS IoT Core（換 endpoint＋憑證，topic 與 payload 不變）。
+隱私設計的關鍵邊界：**影像永不外傳**（跌倒推論在裝置本地完成），語音只有長輩**主動觸發**的段落會上雲做 ASR（對應架構約束 1）。聲音事件喚醒不打破這條線——YAMNet 分類在裝置 NPU 上完成，上行的只有「聽到什麼類別」導出的事件；被判定為求救而錄下的那一段，與按鈕觸發走完全相同的路徑。裝置↔雲端只送事件與文字：上行走 HTTPS `POST /voice`，下行**定案走 MQTT push**。實測韌體（`firmware/HUB-8735-Ultra-ASR-TTS.ino`）**上下行都已接上契約**：上行打部署於 Render 的語音 Agent server（`https://jinsun-voice-server-mg1f.onrender.com/voice`），下行以 PubSubClient 訂閱 `jinsun/{serial}/cmd`（QoS 1、LWT 上下線、指數退避重連）。broker 佈署有三種型態：本機開發＝server 內嵌 aedes；**Render 部署＝server 與裝置各自連同一顆外部 broker 會合**（server 設 `MQTT_URL`，因 PaaS 只對外開 HTTPS、內嵌 broker 進不來）；正式＝AWS IoT Core（換 endpoint＋憑證，topic 與 payload 不變）。
 
 ### AWS 雲端
 
@@ -70,7 +70,9 @@ server 另有一個**進度播報 worker**（`src/progress.js`）：訂閱 Supab
 Realtime 狀態變化，志工「接單(accepted)」「抵達(arrived)」時，反查長輩 `device_serial` 與
 `preferred_lang`，透過下行通道主動下發 `speak`（帶 `lang`）→ 收音機念出「志工○○大約○分鐘到，您再等一下喔」。
 這補上了「感知→決策→行動→回報」閉環裡長輩端唯一的主動出口。**播報語言（國語／台語）**由家屬在 App
-設定（`elders.preferred_lang`），裝置端 TTS 依 `lang` 選語音（正式對應：DynamoDB Streams → Lambda → IoT Core）。
+設定（`elders.preferred_lang`），裝置端 TTS 依 `lang` 分流到兩顆服務——`taigi` → ATEN（台語模型）、
+`mandarin` → Amazon Polly Zhiyu（`jinsun-tts` Lambda）；ATEN 端點不吃 voice 參數、只會講台語，
+所以國語必須是另一顆（正式對應：DynamoDB Streams → Lambda → IoT Core）。
 
 同一個 worker 另訂閱 `volunteers` 的座標變化（志工 App `LocationPublisher` 上報的真實 GPS，
 demo 則由 `travel.js` 模擬）：志工走進長輩家 **250 公尺**（`APPROACH_METERS`）內，就先播一句
