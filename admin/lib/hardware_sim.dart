@@ -154,7 +154,8 @@ class _HardwareSimPageState extends State<HardwareSimPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // 開發／管理者專用切換（放在 ?sim=1 這頁）
-                const _SettingToggleCard(
+                _SettingToggleCard(
+                  backend: widget.backend,
                   settingKey: 'llm_provider',
                   icon: Icons.smart_toy_outlined,
                   title: 'AI 語音對話供應商',
@@ -167,7 +168,8 @@ class _HardwareSimPageState extends State<HardwareSimPage> {
                   fallback: 'apikey',
                 ),
                 const SizedBox(height: 12),
-                const _SettingToggleCard(
+                _SettingToggleCard(
+                  backend: widget.backend,
                   settingKey: 'dispatch_tracking',
                   icon: Icons.my_location,
                   title: '派遣定位模式',
@@ -406,10 +408,12 @@ class _HardwareSimPageState extends State<HardwareSimPage> {
       );
 }
 
-/// 通用「後台設定切換卡」（寫 Supabase app_settings 的某個 key）。開發／管理者專用，
+/// 通用「後台設定切換卡」（寫後端 app_settings 的某個 key）。開發／管理者專用，
 /// 只出現在 ?sim=1 頁。用於 LLM 供應商、派遣定位模式等即時切換（改了免重新部署）。
+/// 讀寫一律走 BackendClient，兩套環境（Supabase／AWS）共用同一個元件。
 class _SettingToggleCard extends StatefulWidget {
   const _SettingToggleCard({
+    required this.backend,
     required this.settingKey,
     required this.title,
     required this.subtitle,
@@ -418,6 +422,7 @@ class _SettingToggleCard extends StatefulWidget {
     this.icon = Icons.tune,
   });
 
+  final BackendClient backend;
   final String settingKey;
   final String title;
   final String subtitle;
@@ -430,7 +435,6 @@ class _SettingToggleCard extends StatefulWidget {
 }
 
 class _SettingToggleCardState extends State<_SettingToggleCard> {
-  final _sb = JinsunSupabase.client;
   String? _value;
   bool _busy = false;
   String? _err;
@@ -443,14 +447,8 @@ class _SettingToggleCardState extends State<_SettingToggleCard> {
 
   Future<void> _load() async {
     try {
-      final row = await _sb
-          .from('app_settings')
-          .select('value')
-          .eq('key', widget.settingKey)
-          .maybeSingle();
-      if (mounted) {
-        setState(() => _value = (row?['value'] as String?) ?? widget.fallback);
-      }
+      final v = await widget.backend.appSetting(widget.settingKey);
+      if (mounted) setState(() => _value = v ?? widget.fallback);
     } catch (e) {
       if (mounted) setState(() => _err = '$e');
     }
@@ -463,11 +461,7 @@ class _SettingToggleCardState extends State<_SettingToggleCard> {
       _err = null;
     });
     try {
-      await _sb.from('app_settings').upsert({
-        'key': widget.settingKey,
-        'value': v,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      });
+      await widget.backend.setAppSetting(widget.settingKey, v);
       if (mounted) setState(() => _value = v);
     } catch (e) {
       if (mounted) setState(() => _err = '$e');

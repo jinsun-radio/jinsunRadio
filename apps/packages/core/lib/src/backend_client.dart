@@ -135,5 +135,30 @@ abstract class BackendClient {
   /// 預設回 null＝查不到／後端不支援，呼叫端視為「直接信任推播內容」。
   Future<CallSignal?> getCallSignal(String signalId) async => null;
 
+  // ---- 家屬綁定收音機 ----
+  // 這幾件事以前是 App 直接打 Supabase（family_app/app_local.dart、admin/hardware_sim.dart、
+  // push_service.dart），換後端時會整個斷掉。收進介面之後，三端才真的「完全沒有直接碰
+  // 某一家後端」，換後端只需要換一個實作檔。
+  // 預設實作為「什麼都不做」，讓 MockBackend 與測試替身不必被迫實作。
+
+  /// 這位家屬已綁定的長輩 id。
+  Future<Set<String>> familyBindings(String familyId) async => const {};
+
+  /// 綁定一台收音機（已綁定視為成功，不擋流程）。
+  Future<void> bindFamily(String familyId, String elderId) async {}
+
+  // ---- 系統設定（社工後台可即時切換；例：llm_provider、dispatch_tracking）----
+  Future<String?> appSetting(String key) async => null;
+  Future<void> setAppSetting(String key, String value) async {}
+
+  // ---- 推播 token（送 push 的 Lambda／Edge Function 依此查收件者）----
+  Future<void> registerDeviceToken({
+    required String token,
+    required String role,
+    String? platform,
+    List<String> elderIds = const [],
+  }) async {}
+  Future<void> unregisterDeviceToken(String token) async {}
+
   void dispose();
 }

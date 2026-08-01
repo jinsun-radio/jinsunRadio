@@ -1,10 +1,16 @@
 export 'src/auth.dart';
+export 'src/aws_backend.dart';
+export 'src/aws_config.dart';
 export 'src/backend_client.dart';
+export 'src/backend_factory.dart';
 export 'src/care_profile.dart';
 export 'src/care_timeline.dart';
+export 'src/cognito_auth.dart';
+export 'src/event_notifications.dart';
 export 'src/mock_backend.dart';
 export 'src/models.dart';
 export 'src/push_service.dart';
+export 'src/row_mappers.dart';
 export 'src/supabase_auth.dart';
 export 'src/supabase_backend.dart';
 export 'src/supabase_config.dart';

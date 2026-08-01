@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'auth.dart';
-import 'supabase_config.dart';
+import 'backend_client.dart';
 
 /// 背景／App 被殺時收到推播的處理器。必須是頂層函式並標註 vm:entry-point，
 /// 否則 release build 會被 tree-shaking 移除。這裡只做輕量處理（系統匣通知由
@@ -57,6 +57,11 @@ class PushService {
   Map<String, dynamic>? _pendingTap;
   StreamSubscription<String>? _tokenRefreshSub;
   AuthUser? _user;
+
+  /// device_tokens 要寫進哪一套後端。App 啟動時指定（見 JinsunBackends）。
+  /// 沒指定就只做本機的 FCM topic 訂閱、不落地 token——這比硬寫進某一家後端好，
+  /// 否則 AWS 環境的 App 會把 token 偷偷寫進正式環境的 Supabase。
+  BackendClient? backend;
   List<String> _topics = const [];
   // 最新的綁定長輩清單。registerForUser 等權限對話框期間 updateElderIds 可能先到，
   // 一律以此欄位為準，避免舊參數把新值蓋回去。
@@ -190,12 +195,7 @@ class PushService {
     _topics = const [];
     try {
       final token = await FirebaseMessaging.instance.getToken();
-      if (token != null) {
-        await JinsunSupabase.client
-            .from('device_tokens')
-            .delete()
-            .eq('token', token);
-      }
+      if (token != null) await backend?.unregisterDeviceToken(token);
     } catch (e) {
       debugPrint('[push] 刪除 token 失敗：$e');
     }
@@ -218,14 +218,12 @@ class PushService {
   Future<void> _upsertToken(
       AuthUser user, String token, List<String> elderIds) async {
     try {
-      await JinsunSupabase.client.from('device_tokens').upsert({
-        'token': token,
-        'user_id': user.id,
-        'role': user.role.name,
-        'platform': _platformName,
-        'elder_ids': elderIds,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'token');
+      await backend?.registerDeviceToken(
+        token: token,
+        role: user.role.name,
+        platform: _platformName,
+        elderIds: elderIds,
+      );
     } catch (e) {
       debugPrint('[push] 寫入 device_tokens 失敗：$e');
     }

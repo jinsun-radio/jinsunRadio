@@ -10,15 +10,28 @@ import 'package:jinsun_core/jinsun_core.dart';
 import 'package:jinsun_ui_kit/jinsun_ui_kit.dart';
 import 'package:record/record.dart';
 
-/// 語音 server（Render 正式站）；部署時可用 --dart-define=SIM_BASE=... 覆蓋。
-const _serverBase = String.fromEnvironment(
-  'SIM_BASE',
-  defaultValue: 'https://jinsun-voice-server-mg1f.onrender.com',
-);
+/// 語音 server；部署時可用 --dart-define=SIM_BASE=... 覆蓋。
+const _simBase = String.fromEnvironment('SIM_BASE');
+
+/// AWS 平行環境的 /voice 與 /asr 都在 API Gateway 上，跟 Render 那套不是同一個網域。
+/// 沒明講 SIM_BASE 時就跟著後端走，避免「後端切到 AWS、語音卻還在打 Render」這種
+/// 半套設定——那會讓長輩說的話寫進另一套資料庫，而畫面上完全看不出來。
+String get _serverBase {
+  if (_simBase.isNotEmpty) return _simBase;
+  if (JinsunBackends.useAws) return JinsunAws.apiBase;
+  return 'https://jinsun-voice-server-mg1f.onrender.com';
+}
+
+/// 這台收音機的裝置帳號（只有 AWS 環境需要——AWS 的 /data/* 一律要 Cognito token）。
+/// 長輩端沒有 UI，不可能叫長輩登入，所以帳密在 build 時注入、開機自動登入。
+/// Supabase 環境不用，維持原本「不登入直接讀」的行為。
+const _deviceUser = String.fromEnvironment('ELDER_DEVICE_USER');
+const _devicePass = String.fromEnvironment('ELDER_DEVICE_PASS');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await JinsunSupabase.ensureInitialized();
+  // 後端由 --dart-define=BACKEND 決定（supabase 預設／aws 平行環境），見 JinsunBackends。
+  await JinsunBackends.ensureInitialized();
   runApp(const ElderApp());
 }
 
@@ -46,13 +59,16 @@ class ElderRadioPage extends StatefulWidget {
 }
 
 class _ElderRadioPageState extends State<ElderRadioPage> {
-  final BackendClient _backend = SupabaseBackend();
+  // 後端與認證都由 JinsunBackends 依建置參數決定（Supabase／AWS），這一端不 import 任一邊的實作。
+  late final AuthRepository _auth = JinsunBackends.createAuth(AuthRole.family);
+  late final BackendClient _backend = JinsunBackends.createBackend(_auth);
   final AudioRecorder _rec = AudioRecorder();
   final FlutterTts _tts = FlutterTts();
   final AudioPlayer _player = AudioPlayer();
   final http.Client _http = http.Client();
 
   int _speakSeq = 0; // 語音序號：只讓「最新一次」發聲，避免兩個聲音一起講
+  bool _cloudTtsAvailable = true; // 雲端 TTS 打不通就整個 session 改用瀏覽器語音
 
   StreamSubscription<List<Elder>>? _elderSub;
   StreamSubscription<List<DispatchTask>>? _taskSub;
@@ -69,6 +85,7 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
   void initState() {
     super.initState();
     _initTts();
+    _signInDevice();
     // 網址帶 ?elder=elder-1 或 ?serial=JS-0001 指定這台是誰的；否則載入後預設第一位。
     final q = Uri.base.queryParameters;
     _elderId = q['elder'];
@@ -89,6 +106,29 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
     _taskSub = _backend.tasks.listen(_onTasks);
   }
 
+  /// AWS 環境的裝置登入。Supabase 環境不需要（維持原本免登入直讀），直接跳過。
+  ///
+  /// 失敗只寫進對話泡泡、不擋 UI：即使拿不到 token，長輩仍看得到畫面，
+  /// 而不是對著一片空白的收音機講話。
+  Future<void> _signInDevice() async {
+    if (!JinsunBackends.useAws) return;
+    try {
+      await _auth.restore();
+      if (_auth.currentUser != null) return;
+      if (_deviceUser.isEmpty || _devicePass.isEmpty) {
+        debugPrint('[jinsun] ⚠️ AWS 模式但缺 ELDER_DEVICE_USER／ELDER_DEVICE_PASS，'
+            '/data/* 會一路 401（見 deploy/aws/deploy-web.sh）');
+        return;
+      }
+      await _auth.signIn(username: _deviceUser, password: _devicePass);
+      // AwsBackend 建構時就打過一次快照，那時還沒有 token 必定失敗。
+      // 登入後立刻補抓一次，否則長輩要盯著「載入中…」等到下一次輪詢。
+      if (_backend case final AwsBackend b) await b.refresh();
+    } catch (e) {
+      debugPrint('[jinsun] 裝置登入失敗：$e');
+    }
+  }
+
   Future<void> _initTts() async {
     try {
       await _tts.setSpeechRate(0.46); // 放慢，長輩聽得清楚
@@ -105,6 +145,7 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
     _player.dispose();
     _http.close();
     _backend.dispose();
+    _auth.dispose();
     super.dispose();
   }
 
@@ -149,13 +190,18 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
   }
 
   /// 打 server 的 /tts 代理（代打 ATEN），拿回可跨源播放的 WAV url；失敗回 null。
+  ///
+  /// AWS 平行環境目前沒有 /tts 路由，會一路 404。第一次打不通就整個 session 關掉，
+  /// 之後每一句直接走瀏覽器語音——否則長輩每聽一句話都要先白等一趟往返。
   Future<String?> _cloudTtsUrl(String text, String langWire) async {
+    if (!_cloudTtsAvailable) return null;
     try {
       final res = await _http
           .post(Uri.parse('$_serverBase/tts'),
               headers: const {'content-type': 'application/json'},
               body: jsonEncode({'text': text, 'lang': langWire}))
           .timeout(const Duration(seconds: 15));
+      if (res.statusCode == 404) _cloudTtsAvailable = false; // 這個環境沒接 /tts
       if (res.statusCode != 200) return null;
       final j = jsonDecode(res.body);
       if (j is Map && j['url'] is String) return j['url'] as String;
