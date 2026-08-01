@@ -1,0 +1,47 @@
+-- 進度播報 webhook：dispatch_tasks / volunteers 變化 → AWS Lambda jinsun-progress。
+--
+-- 取代 cloud/prototype/src/progress.js 的 Supabase Realtime 長連線訂閱
+-- （Lambda 無法常駐，改由資料庫主動推）。沿用本專案既有的 pg_net trigger 模式，
+-- payload 對齊 Supabase Database Webhook 格式，Lambda 端以 x-webhook-secret 驗證。
+--
+-- ⚠️ 本檔含密鑰，不進版控（見 .gitignore）。
+
+create extension if not exists pg_net with schema extensions;
+
+create or replace function public.notify_progress()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  perform net.http_post(
+    url     := 'https://yr0ep335el.execute-api.us-west-2.amazonaws.com/hooks/progress',
+    headers := jsonb_build_object(
+                 'Content-Type', 'application/json',
+                 'x-webhook-secret', '<PROGRESS_WEBHOOK_SECRET>'),
+    body    := jsonb_build_object(
+                 'type',   TG_OP,
+                 'table',  TG_TABLE_NAME,
+                 'schema', TG_TABLE_SCHEMA,
+                 'record', to_jsonb(new),
+                 'old_record', case when TG_OP = 'UPDATE' then to_jsonb(old) else null end)
+  );
+  return new;
+end;
+$$;
+
+-- 志工接單／抵達／結案 → 決定要不要向長輩播報
+drop trigger if exists trg_progress_dispatch_tasks on public.dispatch_tasks;
+create trigger trg_progress_dispatch_tasks
+  after update on public.dispatch_tasks
+  for each row
+  when (old.status is distinct from new.status or old.eta_minutes is distinct from new.eta_minutes)
+  execute function public.notify_progress();
+
+-- 志工 GPS 上報 → 接近長輩家 250m 內先預告「等一下會敲門」
+drop trigger if exists trg_progress_volunteers on public.volunteers;
+create trigger trg_progress_volunteers
+  after update on public.volunteers
+  for each row
+  when (old.lat is distinct from new.lat or old.lng is distinct from new.lng)
+  execute function public.notify_progress();

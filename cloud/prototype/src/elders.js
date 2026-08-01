@@ -1,23 +1,12 @@
 // 依 device_serial 查長輩偏好語言（收音機所有下行語音都帶 lang，裝置端據此選國語／台語語音）。
 // 不快取，讓家屬在 App 改語言後立刻生效（低頻查詢，成本可忽略）。
 
-const URL = process.env.SUPABASE_URL || 'https://ykfxmoubynnbhnburawl.supabase.co';
-const KEY =
-  process.env.SUPABASE_SERVICE_KEY ||
-  process.env.SUPABASE_SECRET_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  '';
+import { createDbClient } from './db.js';
 
 let _sb = null;
 async function client() {
   if (_sb !== null) return _sb;
-  if (!KEY) return (_sb = false);
-  try {
-    const { createClient } = await import('@supabase/supabase-js');
-    _sb = createClient(URL, KEY, { auth: { persistSession: false } });
-  } catch {
-    _sb = false;
-  }
+  _sb = await createDbClient();   // 依 DB_BACKEND 決定 Supabase 或 Aurora
   return _sb;
 }
 

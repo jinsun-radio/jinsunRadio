@@ -1,0 +1,25 @@
+{
+  "Comment": "志工前往中，每 10 分鐘向長輩報一次進度。狀態不再是 accepted（到場/結案）就自行結束——取代 progress.js 的 setInterval。",
+  "StartAt": "Wait10min",
+  "States": {
+    "Wait10min": { "Type": "Wait", "Seconds": 600, "Next": "Tick" },
+    "Tick": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "jinsun-progress",
+        "Payload": { "__sfn": "enroute_tick", "taskId.$": "$.taskId" }
+      },
+      "ResultSelector": { "continue.$": "$.Payload.continue" },
+      "ResultPath": "$.tick",
+      "Retry": [{ "ErrorEquals": ["States.ALL"], "IntervalSeconds": 5, "MaxAttempts": 2 }],
+      "Next": "StillEnroute?"
+    },
+    "StillEnroute?": {
+      "Type": "Choice",
+      "Choices": [{ "Variable": "$.tick.continue", "BooleanEquals": true, "Next": "Wait10min" }],
+      "Default": "Done"
+    },
+    "Done": { "Type": "Succeed" }
+  }
+}

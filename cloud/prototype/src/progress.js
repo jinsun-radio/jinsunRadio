@@ -13,12 +13,24 @@
 //
 // 正式對應：DynamoDB Streams / EventBridge → Lambda → IoT Core 下發。
 
+import { createDbClient } from './db.js';
+
 const URL = process.env.SUPABASE_URL || 'https://ykfxmoubynnbhnburawl.supabase.co';
 const KEY =
   process.env.SUPABASE_SERVICE_KEY ||
   process.env.SUPABASE_SECRET_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   '';
+
+/**
+ * 進度播報開關（預設開）。設 `PROGRESS_WORKER=off` 可讓這台 server 不參與播報。
+ *
+ * 為什麼需要它：本 worker 是「同一個資料庫只能有一個」的角色——它訂閱 dispatch_tasks
+ * 變化後主動對收音機發話。若同時有兩台 server 連同一個 Supabase（例如 Render 保底環境
+ * 與 AWS 正式環境並存），兩邊都會反應同一筆變化，各自往自己的 broker 發，且各自維護
+ * 去重狀態、互不知情。備援那台請設 off，只保留 /voice 的能力。
+ */
+const PROGRESS_ENABLED = (process.env.PROGRESS_WORKER || 'on').toLowerCase() !== 'off';
 
 /** 「快到門口了」的播報距離門檻（公尺）。機車 18km/h 走 250m 約 50 秒，夠長輩走到門邊。 */
 const APPROACH_METERS = Number(process.env.APPROACH_METERS) || 250;
@@ -212,18 +224,19 @@ export function createProgressWorker({ downlink, log = console.log, client = nul
   return {
     /** 啟動 Realtime 訂閱。回傳 'live' | 'dryrun'。 */
     async start() {
+      if (!PROGRESS_ENABLED) {
+        log('[progress] PROGRESS_WORKER=off → 本機不參與進度播報（由另一端負責，避免重複）');
+        return 'off';
+      }
       if (!KEY) {
         log('[progress] 無 Supabase 憑證 → 進度播報停用（志工接單/抵達不會主動念）');
         return 'dryrun';
       }
-      let createClient;
-      try {
-        ({ createClient } = await import('@supabase/supabase-js'));
-      } catch {
-        log('[progress] 未安裝 @supabase/supabase-js → 進度播報停用');
+      sb = await createDbClient();   // 依 DB_BACKEND 決定 Supabase 或 Aurora
+      if (!sb) {
+        log('[progress] 資料層不可用 → 進度播報停用');
         return 'dryrun';
       }
-      sb = createClient(URL, KEY, { auth: { persistSession: false } });
       sb.channel('progress:dispatch_tasks')
         .on(
           'postgres_changes',

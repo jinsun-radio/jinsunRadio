@@ -1,3 +1,10 @@
+-- ⚠️ 自動產生，請勿直接編輯。
+-- 來源：cloud/supabase/schema.sql
+-- 產生：node cloud/aws/db/transform-schema.mjs > cloud/aws/db/schema.sql
+--
+-- 與來源的差異（見 transform-schema.mjs 檔頭說明）：
+--   移除 auth.users 外鍵、fn_handle_new_user 觸發器、supabase_realtime publication、RLS policies。
+--   資料表、型別、業務觸發器（fn_on_radio_event / fn_after_radio_event）與種子資料完全保留。
 -- 金孫收音機 · Supabase Schema v1
 -- 對應 jinsun_core 的資料模型，並支援：硬體事件 HTTP 上報、跨端聊天、即時推播。
 -- 執行方式：psql "$CONN" -f schema.sql  或貼到 Supabase Dashboard → SQL Editor。
@@ -28,7 +35,7 @@ do $$ begin create type lang_t as enum ('mandarin','taigi'); exception when dupl
 
 -- 使用者 profile（連 Supabase Auth 的 auth.users）
 create table if not exists profiles (
-  id uuid primary key references auth.users on delete cascade,
+  id uuid primary key,   -- 身分改由 Cognito 管理（原為 Supabase auth.users 外鍵）
   role user_role not null default 'family',
   name text not null default '',
   phone text,
@@ -59,7 +66,7 @@ alter table elders add column if not exists phone text;                        -
 
 -- 家屬綁定長輩（一位家屬可綁多台，一台可多位家屬）
 create table if not exists family_bindings (
-  family_id uuid references auth.users on delete cascade,
+  family_id uuid,   -- 身分改由 Cognito 管理（原為 Supabase auth.users 外鍵）
   elder_id text references elders on delete cascade,
   created_at timestamptz default now(),
   primary key (family_id, elder_id)
@@ -257,27 +264,15 @@ create trigger trg_after_radio_event after insert on radio_events
   for each row execute function fn_after_radio_event();
 
 -- 新帳號自動建 profile
-create or replace function fn_handle_new_user() returns trigger as $$
-begin
-  insert into profiles (id, role, name)
-  values (new.id,
-          coalesce((new.raw_user_meta_data->>'role')::user_role, 'family'),
-          coalesce(new.raw_user_meta_data->>'name', ''))
-  on conflict (id) do nothing;
-  return new;
-end;
-$$ language plpgsql security definer;
-
-drop trigger if exists trg_new_user on auth.users;
-create trigger trg_new_user after insert on auth.users
-  for each row execute function fn_handle_new_user();
+-- fn_handle_new_user / trg_new_user 已移除：Aurora 無 auth.users。
+-- 使用者建立時寫入 profiles 改由 Cognito Post-Confirmation Lambda 負責。
 
 -- 裝置推播 token（FCM registration token）。三端 App 登入後上報，
 -- send-push Edge Function 依此查收件者。role=收件角色；elder_ids=家屬綁定的長輩
 -- （只收這些長輩的事件通知）；志工／社工的 elder_ids 為空，靠 role 廣播。
 create table if not exists device_tokens (
   token       text primary key,
-  user_id     uuid references auth.users(id) on delete cascade,
+  user_id     uuid,   -- 身分改由 Cognito 管理（原為 Supabase auth.users 外鍵）
   role        text not null,
   platform    text,
   elder_ids   text[] not null default '{}',
@@ -285,70 +280,6 @@ create table if not exists device_tokens (
 );
 create index if not exists idx_device_tokens_role on device_tokens (role);
 create index if not exists idx_device_tokens_elder on device_tokens using gin (elder_ids);
-
--- ========== 即時推播 ==========
-alter table elders replica identity full;
-alter table radio_events replica identity full;
-alter table dispatch_tasks replica identity full;
-alter table task_messages replica identity full;
-alter table call_signals replica identity full;
-alter table volunteers replica identity full;
-
-do $$
-begin
-  begin alter publication supabase_realtime add table elders; exception when duplicate_object then null; end;
-  begin alter publication supabase_realtime add table radio_events; exception when duplicate_object then null; end;
-  begin alter publication supabase_realtime add table dispatch_tasks; exception when duplicate_object then null; end;
-  begin alter publication supabase_realtime add table task_messages; exception when duplicate_object then null; end;
-  begin alter publication supabase_realtime add table call_signals; exception when duplicate_object then null; end;
-  begin alter publication supabase_realtime add table volunteers; exception when duplicate_object then null; end;
-  begin alter publication supabase_realtime add table app_settings; exception when duplicate_object then null; end;
-  begin alter publication supabase_realtime add table life_events; exception when duplicate_object then null; end;
-end $$;
-
--- ========== RLS ==========
--- Demo 階段：讀取全開放、寫入開放給登入者；radio_events 額外允許 anon insert（硬體用）。
--- ⚠️ 正式版需按角色收緊（家屬只看綁定的長輩、志工只看接到的單…），此處為 demo 求快。
-alter table elders enable row level security;
-alter table radio_events enable row level security;
-alter table dispatch_tasks enable row level security;
-alter table task_messages enable row level security;
-alter table social_workers enable row level security;
-alter table time_bank_ledger enable row level security;
-alter table profiles enable row level security;
-alter table family_bindings enable row level security;
-alter table call_signals enable row level security;
-alter table volunteers enable row level security;
-alter table volunteer_certificates enable row level security;
-alter table app_settings enable row level security;
-alter table life_events enable row level security;
-
-do $$
-declare t text;
-begin
-  foreach t in array array['elders','radio_events','dispatch_tasks','task_messages',
-                           'social_workers','time_bank_ledger','profiles','family_bindings',
-                           'call_signals','volunteers','volunteer_certificates','app_settings','life_events']
-  loop
-    execute format('drop policy if exists "demo_read" on %I', t);
-    execute format('drop policy if exists "demo_write" on %I', t);
-    execute format('create policy "demo_read" on %I for select using (true)', t);
-    execute format('create policy "demo_write" on %I for all to authenticated using (true) with check (true)', t);
-  end loop;
-  -- 硬體以 anon key 上報事件
-  drop policy if exists "device_insert" on radio_events;
-  create policy "device_insert" on radio_events for insert to anon with check (true);
-end $$;
-
--- device_tokens：使用者只能讀寫自己的 token（不套用 demo 全開）。
--- send-push Edge Function 用 service_role key，繞過 RLS 讀全部 token。
-alter table device_tokens enable row level security;
-do $$
-begin
-  drop policy if exists "own_tokens" on device_tokens;
-  create policy "own_tokens" on device_tokens for all to authenticated
-    using (user_id = auth.uid()) with check (user_id = auth.uid());
-end $$;
 
 -- ========== 種子資料（對應目前三端 mock，接上就有資料、紀錄不空）==========
 insert into elders (id, device_serial, name, age, address, lat, lng, preferred_lang) values

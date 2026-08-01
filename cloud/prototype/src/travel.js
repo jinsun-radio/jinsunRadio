@@ -8,21 +8,24 @@
 //
 // 以 DEMO_TRAVEL=0 關閉（正式版由真實 GPS 驅動，不需要模擬）。
 // 正式對應：真裝置 GPS → IoT Core → 位置更新，無需本模組。
+//
+// 資料層走 db.js 轉接層（DB_BACKEND=supabase|aurora），兩套環境共用同一段查詢程式碼。
+// 觸發來源依後端能力自動選擇：Supabase 有 Realtime 就訂閱；Aurora 沒有，改輪詢
+// 「status=accepted 的單」。輪詢不是降級——simulate() 本來就自帶 active 去重與
+// 每步狀態複查，重複觸發同一單會被擋掉。
 
-const URL = process.env.SUPABASE_URL || 'https://ykfxmoubynnbhnburawl.supabase.co';
-const KEY =
-  process.env.SUPABASE_SERVICE_KEY ||
-  process.env.SUPABASE_SECRET_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  '';
+import { createDbClient, dbConfigured, dbBackend } from './db.js';
 
 const STEP_MS = Number(process.env.TRAVEL_STEP_MS) || 2000; // 每步間隔
 const STEPS = Number(process.env.TRAVEL_STEPS) || 12; // 幾步走完全程（12×2s＝24s）
+/** 無 Realtime 時的掃描間隔。志工接單到家屬看到車子開始動，最多差這麼久。 */
+const POLL_MS = Number(process.env.TRAVEL_POLL_MS) || 3000;
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export function createTravelSimulator({ log = console.log } = {}) {
-  let sb = null;
+export function createTravelSimulator({ log = console.log, client = null } = {}) {
+  let sb = client;
+  let poller = null;
   const active = new Set(); // 進行中的 taskId，避免同一單重複啟動
 
   async function one(table, id, cols) {
@@ -81,37 +84,65 @@ export function createTravelSimulator({ log = console.log } = {}) {
     active.delete(taskId);
   }
 
+  /** 掃一輪「已接單但還沒開始跑」的單（無 Realtime 的後端用）。 */
+  async function sweep() {
+    const { data, error } = await sb
+      .from('dispatch_tasks')
+      .select('id,status,assignee_name,elder_id,eta_minutes')
+      .eq('status', 'accepted');
+    if (error) {
+      log(`[travel] 掃描失敗：${error.message}`);
+      return;
+    }
+    for (const row of data || []) {
+      if (active.has(row.id)) continue;
+      simulate(row).catch((e) => log(`[travel] 失敗：${e?.message || e}`));
+    }
+  }
+
   return {
     async start() {
       if ((process.env.DEMO_TRAVEL || '1') === '0') {
         log('[travel] DEMO_TRAVEL=0 → 志工移動模擬停用（由真實 GPS 驅動）');
         return 'off';
       }
-      if (!KEY) {
-        log('[travel] 無 Supabase 憑證 → 移動模擬停用');
+      if (!dbConfigured()) {
+        log(`[travel] 無 ${dbBackend} 憑證 → 移動模擬停用`);
         return 'dryrun';
       }
-      let createClient;
-      try {
-        ({ createClient } = await import('@supabase/supabase-js'));
-      } catch {
-        log('[travel] 未安裝 @supabase/supabase-js → 移動模擬停用');
+      sb = sb || (await createDbClient());
+      if (!sb) {
+        log('[travel] 資料層不可用 → 移動模擬停用');
         return 'dryrun';
       }
-      sb = createClient(URL, KEY, { auth: { persistSession: false } });
-      sb.channel('travel:dispatch_tasks')
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'dispatch_tasks' },
-          (p) => {
-            if (p.new?.status === 'accepted') {
-              simulate(p.new).catch((e) => log(`[travel] 失敗：${e?.message || e}`));
-            }
-          },
-        )
-        .subscribe((st) => log(`[travel] realtime 訂閱：${st}`));
+      // Supabase：訂閱 Realtime，接單當下就出發。
+      if (typeof sb.channel === 'function') {
+        sb.channel('travel:dispatch_tasks')
+          .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'dispatch_tasks' },
+            (p) => {
+              if (p.new?.status === 'accepted') {
+                simulate(p.new).catch((e) => log(`[travel] 失敗：${e?.message || e}`));
+              }
+            },
+          )
+          .subscribe((st) => log(`[travel] realtime 訂閱：${st}`));
+        return 'live';
+      }
+      // Aurora（Data API）：沒有 Realtime，改輪詢已接單的派遣單。
+      poller = setInterval(() => {
+        sweep().catch((e) => log(`[travel] 掃描失敗：${e?.message || e}`));
+      }, POLL_MS);
+      if (typeof poller.unref === 'function') poller.unref(); // 不擋 process 結束
+      log(`[travel] ${dbBackend} 無 Realtime → 每 ${POLL_MS}ms 輪詢已接單的派遣單`);
       return 'live';
     },
+    stop() {
+      if (poller) clearInterval(poller);
+      poller = null;
+    },
     simulate, // 測試用
+    sweep, // 測試用
   };
 }

@@ -11,6 +11,13 @@
 // 預設供應商：把 AWS 抽掉，預設走 api key 版本。
 const ENV_PROVIDER = process.env.LLM_PROVIDER || 'apikey';
 
+// 部署層強制指定，**優先於後台設定**。
+// 為什麼需要它：`app_settings.llm_provider` 是所有部署共用的一個值，但各部署的能力不同——
+// Lambda 有 AWS 憑證卻沒有 XCC 金鑰，Render 則相反。後台選了對方才有的供應商時，
+// 這一端只會靜默退回 mock（長輩會收到罐頭回覆，且不易察覺）。
+// 設了這個變數就跳過後台查詢，讓「這台機器實際做得到什麼」說了算。不設＝維持原本行為。
+const FORCE_PROVIDER = process.env.LLM_PROVIDER_FORCE || '';
+
 // ---- apikey（OpenAI 相容）----
 const API_BASE = process.env.LLM_API_BASE || 'https://llm-gateway.xcc.tw/v1';
 const API_KEY = process.env.LLM_API_KEY || process.env.XCC_GATEWAY_PAT || '';
@@ -36,10 +43,10 @@ const SB_KEY =
   '';
 let _sbPromise = null;
 function supa() {
-  if (!SB_URL || !SB_KEY) return Promise.resolve(null);
-  _sbPromise ??= import('@supabase/supabase-js')
-    .then(({ createClient }) =>
-      createClient(SB_URL, SB_KEY, { auth: { persistSession: false } }))
+  // 供應商設定存在資料層，兩套環境各有自己的 app_settings（見 ../db.js）
+  _sbPromise ??= import('../db.js')
+    .then(({ createDbClient }) => createDbClient())
+    .then((c) => c || null)
     .catch(() => null);
   return _sbPromise;
 }
@@ -51,6 +58,11 @@ const CACHE_MS = 10_000;
 export async function currentProvider() {
   const now = Date.now();
   if (_cache.value && now - _cache.at < CACHE_MS) return _cache.value;
+  // 部署層強制指定：跳過後台查詢（見檔頭 FORCE_PROVIDER 說明）
+  if (FORCE_PROVIDER) {
+    _cache = { value: FORCE_PROVIDER, at: now };
+    return FORCE_PROVIDER;
+  }
   let p = ENV_PROVIDER;
   const sb = await supa();
   if (sb) {

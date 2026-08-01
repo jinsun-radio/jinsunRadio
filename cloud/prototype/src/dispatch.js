@@ -8,6 +8,8 @@
 // 沒有 @supabase/supabase-js 或缺憑證時 → dry-run（印 log），讓狀態機/測試仍可跑。
 // 正式對應：Step Functions + DynamoDB + AppSync。
 
+import { createDbClient } from './db.js';
+
 const URL = process.env.SUPABASE_URL || 'https://ykfxmoubynnbhnburawl.supabase.co';
 // 接受多種命名：SERVICE_KEY（舊）／SECRET_KEY（新 sb_secret_）；最後才退到 anon（寫不了派遣單）。
 const KEY =
@@ -30,19 +32,11 @@ export function setSupabaseClientForTest(fake) {
 
 async function client() {
   if (_sb !== null) return _sb;
-  if (!KEY) {
-    _sb = false;
-    return false;
-  }
-  try {
-    const { createClient } = await import('@supabase/supabase-js');
-    _sb = createClient(URL, KEY, { auth: { persistSession: false } });
-    _mode = 'live';
-    return _sb;
-  } catch {
-    _sb = false;
-    return false;
-  }
+  // 依 DB_BACKEND 取得 Supabase 或 Aurora client；查詢語法兩者相同（見 db.js）
+  const sb = await createDbClient();
+  _sb = sb;
+  _mode = sb ? 'live' : 'dryrun';
+  return sb;
 }
 
 /** 同一長輩若已有未結案的同類派遣單，回傳其 id，否則 null（避免重複開單）。 */
