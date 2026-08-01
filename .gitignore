@@ -87,7 +87,18 @@ brag-output-*/
 
 # 打包產物（APK 等大檔，勿進 git；見 GitHub 100MB 限制）
 dist/
+
+# AWS 平行環境
+cloud/supabase/migrations/*progress_webhooks*.sql
 # Lambda 打包產物（cloud/aws/scripts/build.sh 產生）。
 # 每支 Lambda 一份 node_modules ＋ zip，實測 157MB；voice.zip 單檔就 14MB。
 # 內容全部可由 build.sh 重新產生，沒有進版控的價值。
 cloud/aws/.build/
+
+# 韌體機密：WiFi 密碼、ASR key、AWS IoT 裝置憑證與私鑰（範本是 secrets.h.example）
+firmware/*/secrets.h
+# 憑證檔本體（重簽時會落在工作目錄）
+*.cert.pem
+*.key.pem
+*.public.pem
+cert.arn

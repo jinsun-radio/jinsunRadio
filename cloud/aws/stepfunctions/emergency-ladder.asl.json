@@ -1,0 +1,74 @@
+{
+  "Comment": "金孫收音機 · Emergency 逾時階梯。onStart 由 POST /voice 同步回覆；本狀態機自第一階起算，用絕對時間戳避免轉場開銷累積。Escalate 會真的寫 radio_events + dispatch_tasks，安撫語取自其回傳值。",
+  "StartAt": "Wait8s",
+  "States": {
+    "Wait8s": {
+      "Type": "Wait",
+      "TimestampPath": "$.step1At",
+      "Next": "SpeakStep1"
+    },
+    "SpeakStep1": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "jinsun-speak",
+        "Payload": {
+          "deviceSerial.$": "$.deviceSerial",
+          "text.$": "$.script.step1",
+          "lang.$": "$.lang"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Wait12s"
+    },
+    "Wait12s": {
+      "Type": "Wait",
+      "TimestampPath": "$.escalateAt",
+      "Next": "Escalate"
+    },
+    "Escalate": {
+      "Comment": "20 秒到：寫 radio_events(escalated) + dispatch_tasks(kind=emergency) → 觸發三端推播",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "jinsun-voice",
+        "Payload": {
+          "__sfn": "escalate",
+          "deviceSerial.$": "$.deviceSerial",
+          "elderId.$": "$.elderId",
+          "eventId.$": "$.eventId",
+          "keyword.$": "$.keyword",
+          "transcript.$": "$.transcript"
+        }
+      },
+      "ResultPath": "$.dispatch",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed",
+            "Lambda.ServiceException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Next": "SpeakOnEscalated"
+    },
+    "SpeakOnEscalated": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "jinsun-speak",
+        "Payload": {
+          "deviceSerial.$": "$.deviceSerial",
+          "text.$": "$.dispatch.Payload.text",
+          "lang.$": "$.lang"
+        }
+      },
+      "ResultPath": null,
+      "End": true
+    }
+  }
+}

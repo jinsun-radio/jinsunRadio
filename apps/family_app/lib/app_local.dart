@@ -138,7 +138,7 @@ class AppLocal extends ChangeNotifier {
     'JS-0003': 'elder-3',
   };
 
-  /// 已綁定的長輩 elderId（登入後從 Supabase family_bindings 載入）
+  /// 已綁定的長輩 elderId（登入後從後端的 family_bindings 載入）
   final Set<String> boundIds = {};
   bool bindingsLoaded = false;
 
@@ -146,17 +146,7 @@ class AppLocal extends ChangeNotifier {
   Future<void> loadBindings() async {
     final uid = auth.currentUser?.id;
     boundIds.clear();
-    if (uid != null) {
-      try {
-        final rows = await JinsunSupabase.client
-            .from('family_bindings')
-            .select('elder_id')
-            .eq('family_id', uid);
-        for (final r in rows) {
-          boundIds.add(r['elder_id'] as String);
-        }
-      } catch (_) {}
-    }
+    if (uid != null) boundIds.addAll(await backend.familyBindings(uid));
     bindingsLoaded = true;
     notifyListeners();
   }
@@ -169,10 +159,7 @@ class AppLocal extends ChangeNotifier {
     final uid = auth.currentUser?.id;
     if (uid != null) {
       try {
-        await JinsunSupabase.client.from('family_bindings').upsert(
-          {'family_id': uid, 'elder_id': elderId},
-          onConflict: 'family_id,elder_id',
-        );
+        await backend.bindFamily(uid, elderId);
       } catch (_) {}
     }
     boundIds.add(elderId);

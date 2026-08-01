@@ -190,16 +190,41 @@ mosquitto_pub -h <開發機IP> -t 'jinsun/JS-0001/cmd' \
 ```
 把 curl／mosquitto 行為用 http/mqtt client 複刻即可，契約一致。（沒裝 mosquitto 的話，`npx mqtt sub -h <開發機IP> -t 'jinsun/JS-0001/cmd' -v` 等效。）
 
-## 6. 正式 AWS 對應
+## 6. AWS 平行環境（已建好，韌體端一個開關切換）
 
-| 原型 | 正式 |
+`cloud/aws/` 是一套**與正式環境完全獨立**的平行環境，伺服器端已實測跑通整條黃金鏈路。
+**契約完全不變**——topic、payload、QoS、LWT、`/voice` 的請求與回應逐欄位相同，只有端點與憑證不同。
+
+| 原型／正式環境 | AWS 平行環境 |
 |---|---|
-| `POST /voice`（HTTP） | API Gateway + Lambda |
-| aedes MQTT broker（內嵌於 server，:1883） | **AWS IoT Core**（換 endpoint＋憑證，topic 與 payload 不變） |
-| 上下線偵測（aedes 連線事件＋LWT） | IoT Core lifecycle events |
-| 進度播報 worker | DynamoDB Streams → Lambda → IoT Core |
+| `POST /voice`（Render，HTTP） | API Gateway `$default` → `jinsun-voice` Lambda |
+| aedes／mqttgo.io broker | **AWS IoT Core**（X.509 雙向 TLS） |
+| 上下線偵測（broker 連線事件＋LWT） | IoT Core lifecycle events（LWT 用法不變） |
+| 進度播報 worker | Step Functions + `jinsun-speak` Lambda → IoT Core |
 
-`BASE_URL` 那層抽象換成 IoT endpoint + 憑證，主迴圈邏輯不變。
+韌體端切換點是 `HUB-8735-Ultra-ASR-TTS.ino` 開頭的 `#define BACKEND_AWS`（`0`／`1`），
+主迴圈與所有指令處理邏輯完全不動：
+
+```
+BACKEND_AWS 0   BASE_URL=https://jinsun-voice-server-mg1f.onrender.com
+                MQTT=mqttgo.io:8883（ISRG Root X1，無認證）
+BACKEND_AWS 1   BASE_URL=https://yr0ep335el.execute-api.us-west-2.amazonaws.com
+                MQTT=a2zyk2buv4tih2-ats.iot.us-west-2.amazonaws.com:8883
+                     （Amazon Root CA 1 ＋ 裝置憑證/私鑰，走 secrets.h）
+```
+
+⚠️ 走 AWS 要注意三件事（都是「不會給錯誤碼」的失敗）：
+
+1. **一定要燒裝置憑證**。IoT Core 認證失敗是直接切斷 TCP，PubSubClient 只會回 `rc=-2`，
+   看起來就像網路不穩。產生指令見 [`../../firmware/README.md`](../../firmware/README.md)。
+2. **MQTT client id 必須等於 IoT Thing 名稱**（＝`device_serial`）。Policy 用
+   `${iot:Connection.Thing.ThingName}` 限縮 client id 與 topic，差一個字就被斷線。
+3. **不要改用 443**。IoT Core 的 443 需要 ALPN `x-amzn-mqtt-ca`，AmebaPro2 這個核心送不出去；
+   8883 才是這塊板子唯一可行的路。
+
+**兩套環境不共用資料庫**，切過去之後事件只會出現在 AWS 那三端網址上。接手前先讀
+[`aws-handoff.md`](aws-handoff.md)。ASR／TTS 兩邊共用同一組雲端服務（AWS 版的 Transcribe
+Lambda 尚未做），所以只有上面這兩個端點會變。
 
 ## 交接清單（韌體端 TODO）
 - [x] 語音 pipeline 實機跑通：按鈕錄音 → 雲端 ASR → LLM → 雲端 TTS → 播放（`HUB-8735-Ultra-ASR-TTS.ino`）

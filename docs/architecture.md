@@ -39,6 +39,13 @@
 
 ### AWS 雲端
 
+> 📐 **完整 AWS 目標架構、服務對應、部署方式與分階段落地計畫**（含 Bedrock / SageMaker AI / Kiro 的具體用途、成本估算、IoT Policy 與 Step Functions 骨架）見
+> [`requirements/aws-architecture.md`](requirements/aws-architecture.md)。下表為摘要。
+>
+> 🟢 **想看「現在實際跑著什麼」**（每個資源都用 `aws` CLI 查證過、哪些線是通的、哪些還沒接）見
+> [`requirements/aws-architecture.md` §2.1 現況架構總圖](requirements/aws-architecture.md#21-現況架構總圖2026-08-01-實查)。
+> 下表與 §2 目標圖都含尚未建置的服務，**不要當成現況讀**。
+
 括號標註為目前規劃中、尚未實作的原型程式對應（Node.js）：
 
 | AWS 服務 | 用途 | 原型對應 |
@@ -47,7 +54,10 @@
 | API Gateway + Lambda | 語音文字入口 `POST /voice` | `cloud/prototype/`（已建） |
 | LLM（意圖分類／需求解析／陪伴對話） | 語音多 Agent server 的大腦 | `cloud/prototype/`（已建）。**預設走 API key 的 OpenAI 相容閘道**（XCC Gateway，與 ASR 同一把金鑰）；可選 AWS Bedrock 或 mock。供應商由**社工後台即時切換**（Supabase `app_settings.llm_provider`，server 短快取讀取，免重新部署） |
 | Step Functions + Lambda | 事件分級、20 秒升級判斷、派遣狀態機 | Emergency Agent 逾時階梯 + 既有 Supabase 狀態機 |
-| DynamoDB + Cognito | 事件與使用者資料、長期記憶、角色權限 | Supabase（現行）+ Memory Agent |
+| Aurora Serverless v2（Data API） | 三端與派遣的關聯式資料 | Supabase Postgres（現行）。轉接層 `cloud/prototype/src/db.js` 讓兩套環境跑同一段查詢 |
+| API Gateway + `jinsun-data` Lambda | 三端 App 的資料讀寫（取代 PostgREST + Realtime） | Supabase client + Realtime 訂閱。AWS 側改用「變更指紋輪詢」，理由見 [`requirements/aws-architecture.md`](requirements/aws-architecture.md) §4.4 |
+| Cognito User Pool（3 個 Group） | 家屬／志工／社工的身分與角色 | Supabase Auth + RLS。RLS 的等價規則重寫在 `cloud/aws/lambda/data/authz.mjs` |
+| DynamoDB | Emergency session、長期記憶等 key-value 狀態 | 記憶體 Map + Memory Agent |
 | Transcribe（或 OpenAI Whisper） | **家屬↔志工聊天的語音輸入轉文字**（ASR） | Supabase Edge Function `whisper`（已建，`cloud/supabase/functions/whisper`） |
 | Amazon SNS Mobile Push / Pinpoint | **背景推播**（App 關閉／在背景時的系統通知） | FCM + APNs（已建）＋ Supabase Database Webhook → Edge Function `send-push`（已建，`cloud/supabase/functions/send-push`） |
 
@@ -86,7 +96,7 @@ demo 則由 `travel.js` 模擬）：志工走進長輩家 **250 公尺**（`APPR
 雲端狀態機透過 **WebSocket / AppSync** 即時推播通知給三種使用者端，並依 **Cognito** 做角色區分。
 
 **推播是雙軌的**（家屬要收到「疑似跌倒」、志工要收到派遣單，即使 App 沒開著）：
-- **前景即時同步**：App 開著時，`SupabaseBackend` 訂閱 Supabase Realtime，事件／派遣單一變化就更新畫面並跳 App 內通知（現行對應：AppSync/WebSocket）。
+- **前景即時同步**：App 開著時，`SupabaseBackend` 訂閱 Supabase Realtime，事件／派遣單一變化就更新畫面並跳 App 內通知。AWS 平行環境的對應實作是 `AwsBackend`：每 3 秒打一次極輕量的 `/data/version` 取變更指紋，指紋變了才抓快照，且每次寫入後立刻強制刷新（取捨理由見 [`requirements/aws-architecture.md`](requirements/aws-architecture.md) §4.4）。兩者實作同一個 `BackendClient` 介面，由 `JinsunBackends` 依建置參數 `--dart-define=BACKEND` 選用，**UI 完全不知道自己連的是哪一套**。
 - **背景系統推播**：App 在背景或關閉時，靠 **FCM（Android）＋ APNs（iOS）** 送系統通知。`radio_events` / `dispatch_tasks` 的 INSERT/UPDATE 觸發 Supabase **Database Webhook** → Edge Function [`send-push`](../cloud/supabase/functions/send-push/index.ts) → 依收件角色／綁定長輩查 `device_tokens` → FCM HTTP v1 發送（現行對應：SNS Mobile Push / Pinpoint）。
 
 App 端由 `jinsun_core` 的 `PushService`（`apps/packages/core`）統一處理：登入後上報 FCM token 到 `device_tokens`、訂閱對應 topic、前景/背景/點擊訊息處理。**推播只承載事件文字，不含原始影音，與隱私邊界（約束 1）一致。** 接入所需的 Firebase／APNs 外部設定與資料流細節見 [`requirements/push-notifications.md`](requirements/push-notifications.md)。

@@ -16,7 +16,8 @@ import 'services/location_publisher.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SemanticsBinding.instance.ensureSemantics();
-  await JinsunSupabase.ensureInitialized();
+  // 後端由 --dart-define=BACKEND 決定（supabase 預設／aws 平行環境），見 JinsunBackends。
+  await JinsunBackends.ensureInitialized();
   // 推播（FCM+APNs）：初始化在 runApp 前；token 註冊在登入後（見下方）。
   await PushService.instance.initialize();
   runApp(const VolunteerApp());
@@ -25,7 +26,7 @@ Future<void> main() async {
 class VolunteerApp extends StatefulWidget {
   const VolunteerApp({super.key, this.backend, this.auth});
 
-  // 可注入後端／認證（測試用 MockBackend）；正式版預設 Supabase。
+  // 可注入後端／認證（測試用 MockBackend）；正式版由 JinsunBackends 依建置參數決定。
   // 與 FamilyApp／AdminApp 對齊——沒有這個注入點，widget test 只能去連真 Supabase。
   final BackendClient? backend;
   final AuthRepository? auth;
@@ -42,8 +43,10 @@ class _VolunteerAppState extends State<VolunteerApp> {
   @override
   void initState() {
     super.initState();
-    backend = widget.backend ?? SupabaseBackend();
-    auth = widget.auth ?? SupabaseAuthRepository(role: AuthRole.volunteer);
+    auth = widget.auth ?? JinsunBackends.createAuth(AuthRole.volunteer);
+    backend = widget.backend ?? JinsunBackends.createBackend(auth);
+    // 推播 token 要寫進「目前這一套」後端，不能寫死 Supabase。
+    PushService.instance.backend = backend;
     // 推播 token 註冊：志工登入即註冊（訂閱 role_volunteer，收新派遣單廣播）。
     _pushAuthSub = auth.authStateChanges().listen((user) {
       if (user != null) {

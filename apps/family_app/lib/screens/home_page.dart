@@ -448,12 +448,7 @@ class _DispatchRouteMapState extends State<_DispatchRouteMap> {
   Future<void> _loadMode() async {
     var m = 'simulate';
     try {
-      final row = await JinsunSupabase.client
-          .from('app_settings')
-          .select('value')
-          .eq('key', 'dispatch_tracking')
-          .maybeSingle();
-      m = (row?['value'] as String?) ?? 'simulate';
+      m = await widget.local.backend.appSetting('dispatch_tracking') ?? 'simulate';
     } catch (_) {}
     if (!mounted) return;
     setState(() {

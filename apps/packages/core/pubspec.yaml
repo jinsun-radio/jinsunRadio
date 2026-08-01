@@ -12,6 +12,9 @@ dependencies:
     sdk: flutter
   shared_preferences: ^2.5.5
   supabase_flutter: ^2.8.0
+  # AWS 平行環境：Cognito 與 jinsun-data 都是單純的 HTTPS + JSON，
+  # 不引 Amplify（那會多帶進一整套 plugin 與原生設定檔，只為了呼叫兩個 API）。
+  http: ^1.2.0
   # 推播（FCM + APNs）。三端共用的 PushService 在此，App 只需呼叫。
   firebase_core: ^3.6.0
   firebase_messaging: ^15.1.3

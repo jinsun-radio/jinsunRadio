@@ -14,6 +14,12 @@ do $$ begin create type severity_t as enum ('normal','attention','emergency'); e
 do $$ begin create type event_type_t as enum ('sos','fall_suspected','supply_request'); exception when duplicate_object then null; end $$;
 do $$ begin create type event_status_t as enum ('open','confirmed_ok','escalated','closed'); exception when duplicate_object then null; end $$;
 do $$ begin create type dispatch_kind_t as enum ('emergency','supply'); exception when duplicate_object then null; end $$;
+-- follow_up：長輩多次「疑似跌倒但自行回應無恙」時，為督導開的追蹤訪視待辦
+-- （不派志工、不計時間銀行時數）。三端程式碼已在用這個值（見 supabase_backend.dart
+-- 的 _recordFallTrend 與 models.dart 的 DispatchKind.followUp），但 enum 一直沒有它，
+-- 插入時會炸 `invalid input value for enum dispatch_kind_t`。
+-- 用 add value 而非改上面那行：enum 一旦被欄位引用就不能 drop 重建。
+alter type dispatch_kind_t add value if not exists 'follow_up';
 do $$ begin create type dispatch_status_t as enum ('pending','accepted','arrived','resolved'); exception when duplicate_object then null; end $$;
 do $$ begin create type chat_from_t as enum ('family','volunteer','system'); exception when duplicate_object then null; end $$;
 do $$ begin create type lang_t as enum ('mandarin','taigi'); exception when duplicate_object then null; end $$;   -- 長輩偏好語言：國語／台語（收音機 TTS 用）
@@ -159,6 +165,10 @@ alter table dispatch_tasks add column if not exists offered_until timestamptz;
 alter table dispatch_tasks add column if not exists accepted_at timestamptz;
 alter table dispatch_tasks add column if not exists arrived_at timestamptz;
 alter table dispatch_tasks add column if not exists outcome text;
+-- 結案證明照片（Uber 式拍照結單；家屬／後台可看）。三端程式碼一直在讀寫這一欄
+-- （models.dart 的 proofPhotoUrl、志工端 history_page、resolveTask），schema 卻漏了宣告
+-- —— 只有「附照片結案」那條路徑會炸 42703，平常結案不帶照片時看不出來。
+alter table dispatch_tasks add column if not exists proof_photo_url text;
 
 -- 派遣單聊天訊息（家屬↔志工，限時遮罩，隨派遣單存活）
 create table if not exists task_messages (
@@ -218,15 +228,23 @@ create trigger trg_radio_event before insert on radio_events
 -- 物資（normal）等低分級事件不可把「注意／緊急」中的長輩降回 normal（否則長輩處理中
 -- 又來一筆物資就被悄悄降級）。降級一律由 App 明確處理（confirmElderOk／resolveTask
 -- 直接改 elders）。升級的 escalate 走 radio_events UPDATE，其 elders 同步由 App 端處理。
+-- ⚠️ `cur` 一定要宣告成 severity_t，不能是 text。
+-- 宣告成 text 時 `coalesce(cur, new.severity)` 會是 coalesce(text, severity_t)，
+-- Postgres 無法統一型別 → 每一次 radio_events 寫入都以
+-- `COALESCE types text and severity_t cannot be matched (42804)` 失敗，
+-- 而 dispatch.js 對這個錯誤只 log 不中斷，症狀會是「派遣單開出來了、但沒有對應事件、
+-- 且 elder_id 是 NULL」——最難回推原因的一種壞法。
 create or replace function fn_after_radio_event() returns trigger as $$
-declare cur text;
+declare cur severity_t;
 begin
   select severity into cur from elders where id = new.elder_id;
   update elders
     set last_activity_at = new.occurred_at,
         severity = case
-          when new.severity = 'emergency' then 'emergency'
-          when new.severity = 'attention' and coalesce(cur,'normal') <> 'emergency' then 'attention'
+          when new.severity = 'emergency' then 'emergency'::severity_t
+          when new.severity = 'attention'
+               and coalesce(cur, 'normal'::severity_t) <> 'emergency'::severity_t
+            then 'attention'::severity_t
           else coalesce(cur, new.severity)
         end
     where id = new.elder_id;
