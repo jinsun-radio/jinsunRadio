@@ -196,6 +196,29 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  // ①.5 家屬手動觸發的提醒（吃藥／量血壓…）：家屬 App 按「立即提醒」→ 這裡把提醒語音
+  //      下發給收音機。走與急救安撫、進度播報同一條扇出下行：
+  //        MQTT publish → jinsun/{serial}/cmd（真收音機，QoS 1）
+  //        長輪詢佇列   → 模擬器與長輩網頁（GET /commands）
+  //      符合隱私邊界：只下發「要念的文字」，不涉任何上行影音。
+  if (req.method === 'POST' && req.url.split('?')[0] === '/remind') {
+    const b = await readJson(req);
+    const serial = (b.device_serial || '').toString().trim();
+    const text = (b.text || '').toString().trim();
+    if (!serial || !text) {
+      return send(400, { error: 'need device_serial and text' });
+    }
+    try {
+      const lang = await elders.langOf(serial);
+      downlink.enqueue(serial, { type: 'speak', text, lang });
+      console.log(`[remind] ${serial} "${text}" lang=${lang}`);
+      return send(200, { ok: true, serial, text, lang });
+    } catch (e) {
+      console.error(e);
+      return send(500, { error: String(e?.message || e) });
+    }
+  }
+
   // ②' 下行（模擬器／對測通道）：sim.html 與 curl 用的長輪詢；真韌體走 MQTT push
   if (req.method === 'GET' && req.url.startsWith('/commands')) {
     const { device_serial } = parseQuery(req.url);

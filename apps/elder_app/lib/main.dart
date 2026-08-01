@@ -66,6 +66,9 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
   final FlutterTts _tts = FlutterTts();
   final AudioPlayer _player = AudioPlayer();
   final http.Client _http = http.Client();
+  // 下行指令長輪詢用獨立 client（長連線 35 秒，不佔用 _http 的一般請求）。
+  final http.Client _cmdHttp = http.Client();
+  bool _cmdPolling = false;
 
   int _speakSeq = 0; // 語音序號：只讓「最新一次」發聲，避免兩個聲音一起講
   bool _cloudTtsAvailable = true; // 雲端 TTS 打不通就整個 session 改用瀏覽器語音
@@ -106,6 +109,37 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
       });
     });
     _taskSub = _backend.tasks.listen(_onTasks);
+    _startCommandPolling();
+  }
+
+  /// 下行指令長輪詢：跟雲端 server 要「要念給長輩的話」（家屬按立即提醒、急救安撫、
+  /// 進度播報都走這條）。真收音機走 MQTT；長輩網頁沒有 MQTT，就靠 GET /commands 拉。
+  /// 收到 type:'speak' 就念出來——與硬體行為一致。
+  Future<void> _startCommandPolling() async {
+    if (_cmdPolling) return;
+    _cmdPolling = true;
+    while (mounted) {
+      final serial = _elder?.deviceSerial;
+      if (serial == null || serial.isEmpty) {
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+        continue;
+      }
+      try {
+        final res = await _cmdHttp
+            .get(Uri.parse('$_serverBase/commands?device_serial=$serial'))
+            .timeout(const Duration(seconds: 35));
+        final j = jsonDecode(res.body);
+        final cmds =
+            (j is Map && j['commands'] is List) ? j['commands'] as List : const [];
+        for (final c in cmds) {
+          if (c is Map && c['type'] == 'speak' && c['text'] is String) {
+            await _speak(c['text'] as String);
+          }
+        }
+      } catch (_) {
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
+      }
+    }
   }
 
   /// AWS 環境的裝置登入。Supabase 環境不需要（維持原本免登入直讀），直接跳過。
@@ -146,6 +180,7 @@ class _ElderRadioPageState extends State<ElderRadioPage> {
     _tts.stop();
     _player.dispose();
     _http.close();
+    _cmdHttp.close();
     _backend.dispose();
     _auth.dispose();
     super.dispose();
