@@ -86,7 +86,8 @@ class _StatsPageState extends State<StatsPage> {
             _KpiTile(
                 label: '$rangeLabel物資需求',
                 value: '$supply 次',
-                good: supply == 0),
+                good: true,
+                neutral: true),
           ]),
           const SizedBox(height: 14),
           Card(
@@ -174,11 +175,17 @@ class _StatsPageState extends State<StatsPage> {
 
 class _KpiTile extends StatelessWidget {
   const _KpiTile(
-      {required this.label, required this.value, required this.good});
+      {required this.label,
+      required this.value,
+      required this.good,
+      this.neutral = false});
 
   final String label;
   final String value;
   final bool good;
+  // 中性指標（如物資需求）：不是警訊、也不需標「正常」，隱藏狀態標籤，別讓買個牛奶
+  // 就在儀表板閃「注意」橘字嚇家屬。
+  final bool neutral;
 
   @override
   Widget build(BuildContext context) {
@@ -199,14 +206,16 @@ class _KpiTile extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 19, fontWeight: FontWeight.w800)),
                 ),
-                const SizedBox(width: 6),
-                Text(good ? '正常' : '注意',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: good
-                            ? JinsunColors.okText
-                            : JinsunColors.warnText)),
+                if (!neutral) ...[
+                  const SizedBox(width: 6),
+                  Text(good ? '正常' : '注意',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: good
+                              ? JinsunColors.okText
+                              : JinsunColors.warnText)),
+                ],
               ]),
             ],
           ),

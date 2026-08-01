@@ -72,7 +72,7 @@ Excel buildExportWorkbook({
   ]);
   for (final e in events) {
     final t = taskOf(e.id);
-    // 到場社工優先，否則督導社工。
+    // 處理人員：到場志工（assigneeName）優先，否則督導社工（workerName）。
     final handler = t == null ? '' : (t.assigneeName ?? t.workerName ?? '');
     final handledTime = t == null
         ? ''
@@ -95,9 +95,13 @@ Excel buildExportWorkbook({
     TextCellValue('長輩'),
     TextCellValue('類型'),
     TextCellValue('狀態'),
-    TextCellValue('社工'),
+    TextCellValue('處理志工'),
+    TextCellValue('督導社工'),
     TextCellValue('ETA(分)'),
     TextCellValue('完成時間'),
+    // 政府服務申報通常要求逐案處置結果與現場情形；這兩欄先前漏匯出。
+    TextCellValue('結案處置'),
+    TextCellValue('現場備註'),
   ]);
   for (final t in tasks) {
     taskSheet.appendRow([
@@ -106,8 +110,11 @@ Excel buildExportWorkbook({
       TextCellValue(t.kind.label),
       TextCellValue(taskStatusLabel(t.status)),
       TextCellValue(t.assigneeName ?? ''),
+      TextCellValue(t.workerName ?? ''),
       TextCellValue(t.etaMinutes?.toString() ?? ''),
       TextCellValue(t.resolvedAt != null ? _fmtTime(t.resolvedAt!) : ''),
+      TextCellValue(t.outcome ?? ''),
+      TextCellValue(t.note ?? ''),
     ]);
   }
 

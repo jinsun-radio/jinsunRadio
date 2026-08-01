@@ -463,34 +463,32 @@ class _DispatchRouteMapState extends State<_DispatchRouteMap> {
     if (m == 'simulate') _startSim();
   }
 
-  /// 模擬出發：每 2 秒推進約 5%，約 40 秒「開到」長輩家；ETA 同步倒數。
+  // 模擬移動只推進到「門口前」就停住（≤_simCap），**不主動判定到達**。
+  // 真正的「到達」由志工端按「我到了」或社工後台按「標記到達」決定——長輩端收音機
+  // 也只在那一刻才會播「志工到了」。如此可保證：畫面上的移動路線與實際到達時間同步，
+  // 收音機不會在志工還沒真的到之前就報「已到達」（提早），也不會延後。
+  static const _simCap = 0.9;
+
+  /// 模擬出發：每 2 秒沿路推進約 5%，停在門口前等真正到場；ETA 同步倒數。
   /// 只有志工「已接單、前往中」才模擬移動；還沒接單（pending）不該有人在路上。
   void _startSim() {
     if (_simTimer != null) return;
     if (widget.task.status != DispatchStatus.accepted) return;
     _simTimer = Timer.periodic(const Duration(seconds: 2), (t) {
       if (!mounted) return t.cancel();
-      setState(() => _simProgress = (_simProgress + 0.05).clamp(0.0, 1.0));
-      if (_simProgress >= 1.0) {
-        t.cancel();
-        _simArrive();
-      }
+      final next = (_simProgress + 0.05).clamp(0.0, _simCap);
+      setState(() => _simProgress = next);
+      if (next >= _simCap) t.cancel(); // 到門口就停，不自動 markArrived
     });
-  }
-
-  /// 模擬車程走完＝抵達長輩家：標記到場，家屬看到「已抵達」、長輩端念「志工到了」。
-  Future<void> _simArrive() async {
-    if (widget.task.status != DispatchStatus.accepted) return;
-    try {
-      await widget.local.backend.markArrived(widget.task.id);
-    } catch (_) {}
   }
 
   @override
   void didUpdateWidget(covariant _DispatchRouteMap old) {
     super.didUpdateWidget(old);
-    // 任務轉「已到場」（模擬抵達或志工端真的到了）→ 停模擬、把車程補到底。
-    if (widget.task.status == DispatchStatus.arrived && _simTimer != null) {
+    // 任務真的「到場」（志工端／後台標記到達）→ 停模擬、把車程補到門口內（1.0）。
+    // 用 _simProgress<1 判斷而非 _simTimer!=null：計時器可能已停在門口（_simCap），
+    // 這時仍要在到達當下把橘點補進家門，與收音機「志工到了」同一刻發生。
+    if (widget.task.status == DispatchStatus.arrived && _simProgress < 1.0) {
       _simTimer?.cancel();
       _simTimer = null;
       if (mounted) setState(() => _simProgress = 1.0);
@@ -630,7 +628,10 @@ class _DispatchRouteMapState extends State<_DispatchRouteMap> {
       final baseEta = task.etaMinutes ??
           estimateEtaMinutes(start.latitude, start.longitude,
               elderPos.latitude, elderPos.longitude);
-      displayEta = (baseEta * (1 - _simProgress)).round();
+      // 還沒真的到場前 ETA 至少顯示 1 分鐘，避免橘點還在門口卻先跳「0 分鐘」。
+      displayEta = arrived
+          ? 0
+          : (baseEta * (1 - _simProgress)).round().clamp(1, baseEta < 1 ? 1 : baseEta);
     }
     final line = _route ?? [volPos, elderPos];
     final mid = LatLng(

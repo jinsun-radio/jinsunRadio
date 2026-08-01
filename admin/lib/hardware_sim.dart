@@ -245,9 +245,7 @@ class _HardwareSimPageState extends State<HardwareSimPage> {
             const Text('觸發事件（＝長輩對收音機做的事）',
                 style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            _bigBtn('🔴 按下 SOS 鍵（立即升級派遣）', const Color(0xFFC62828),
-                () => _event('sos')),
-            const SizedBox(height: 8),
+            // 已移除實體 SOS 鍵：長輩端所有互動統一走語音按鈕，模擬器不再保留 SOS 流程。
             Wrap(spacing: 8, runSpacing: 8, children: [
               _btn('🤕 相機偵測「疑似跌倒」', const Color(0xFFEF6C00),
                   () => _event('fall_suspected')),
@@ -388,16 +386,6 @@ class _HardwareSimPageState extends State<HardwareSimPage> {
     _say(t);
     _custom.clear();
   }
-
-  Widget _bigBtn(String label, Color c, VoidCallback onTap) => SizedBox(
-        width: double.infinity,
-        child: FilledButton(
-          style: FilledButton.styleFrom(
-              backgroundColor: c, padding: const EdgeInsets.symmetric(vertical: 14)),
-          onPressed: _serial == null ? null : onTap,
-          child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-        ),
-      );
 
   Widget _btn(String label, Color c, VoidCallback onTap) => FilledButton(
         style: FilledButton.styleFrom(backgroundColor: c),

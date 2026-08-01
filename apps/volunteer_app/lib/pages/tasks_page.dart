@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -658,8 +657,9 @@ class TaskCard extends StatelessWidget {
     if (task.status == DispatchStatus.arrived) {
       return SizedBox(width: double.infinity, child: resolve);
     }
-    // 前往中：導航＋拍照結單並排。不擋一道「我已到達」中間步驟——到場時間由 GPS 接近自動判定；
-    // 若沒觸發，回報結案時自動補上到場時間（見 _resolveWithNote），志工不會卡在「前往中」關不了單。
+    // 前往中：導航＋拍照結單並排。到場時間本可由 GPS 接近自動判定，但志工常沒開定位
+    // （林國男這種「嫌麻煩」的），這時長輩端就收不到「志工到門口了」那句安撫、家屬地圖
+    // 也不會顯示已到場。所以補一顆明顯的「我到了」手動回報 markArrived，把安撫鏈路救回來。
     final nav = OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(48),
@@ -668,11 +668,31 @@ class TaskCard extends StatelessWidget {
       icon: const Icon(Icons.navigation, size: 18),
       label: const Text('導航'),
     );
-    return Row(
+    final arrived = OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(46),
+          foregroundColor: JinsunColors.okText,
+          side: const BorderSide(color: JinsunColors.okText)),
+      onPressed: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        await backend.markArrived(task.id);
+        messenger.showSnackBar(const SnackBar(
+            content: Text('已回報到場，長輩會聽到「志工到了」的安撫語')));
+      },
+      icon: const Icon(Icons.doorbell_outlined, size: 18),
+      label: const Text('我到了（到門口按這裡）'),
+    );
+    return Column(
       children: [
-        nav,
-        const SizedBox(width: 10),
-        Expanded(child: resolve),
+        SizedBox(width: double.infinity, child: arrived),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            nav,
+            const SizedBox(width: 10),
+            Expanded(child: resolve),
+          ],
+        ),
       ],
     );
   }

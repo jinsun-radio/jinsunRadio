@@ -44,7 +44,11 @@ abstract class BackendClient {
   Future<String> uploadProofPhoto(String taskId, Uint8List bytes,
       {String contentType = 'image/jpeg'});
 
-  /// 物資單寬限期內：家屬／社工按「請求支援」→ 立即開放全體志工接單（結束寬限）。
+  /// 「請求支援／拒絕改派」：結束目前的寬限／指派，把單交給下一位志工。
+  /// - Supabase（正式）：改派給「下一位就近志工」（排除已試過的人，含拒絕者本人）；
+  ///   真的沒有其他就近志工時轉請社工協助指派——刻意不「開放全體」，避免與看門狗的
+  ///   單點改派衝突、或迴力鏢改派回剛拒絕的同一人（見 SupabaseBackend.requestSupport）。
+  /// - Mock（離線 demo）：直接把 offeredUntil 設為現在＝立即開放全體搶單。
   Future<void> requestSupport(String taskId);
 
   /// 物資單寬限期內：家屬按「我來處理」→ 取消派工、結案（不派志工、不計時數）。

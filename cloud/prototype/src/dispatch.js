@@ -19,6 +19,29 @@ const KEY =
 let _sb = null;
 let _mode = 'dryrun';
 
+// 「即時亮單」廣播：Postgres Changes（WAL 回放）到三端要 1~3 秒、行動網路更久，達不到
+// 「收音機一觸發、網頁 2 秒內出現任務單」。所以每次寫完事件／派遣單，另外用 Realtime
+// Broadcast（次秒級）打一則到 App 也在聽的 'jinsun-signal' 頻道，App 收到就立刻重抓對應表，
+// 不必等 WAL。走 REST broadcast 端點（無狀態、server 端最省），fire-and-forget、失敗不影響 DB。
+async function broadcastFast(event, payload) {
+  if (!KEY) return;
+  try {
+    await fetch(`${URL}/realtime/v1/api/broadcast`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: KEY,
+        Authorization: `Bearer ${KEY}`,
+      },
+      body: JSON.stringify({
+        messages: [{ topic: 'jinsun-signal', event, payload: payload || {} }],
+      }),
+    });
+  } catch {
+    // 廣播失敗就退回 App 的 Postgres Changes／輪詢，不致命
+  }
+}
+
 // 測試注入點：setSupabaseClientForTest(fake) 之後 client() 直接回傳假 client，
 // 不去 import @supabase/supabase-js、不連真庫。傳 null 還原。
 // 之所以需要這個：escalateEmergency 的 payload 曾兩次寫錯欄位（note 不存在、
@@ -198,6 +221,7 @@ export function createDispatch() {
         return null;
       }
       console.log(`[dispatch] ⏳ AI 詢問中已寫入：event=${evt.data?.id}（家屬端出現確認卡）`);
+      broadcastFast('sync', { tables: ['radio_events', 'elders'] });
       return evt.data?.id;
     },
 
@@ -255,6 +279,7 @@ export function createDispatch() {
       const dupE = await existingOpenTaskId(sb, elderIdResolved, 'emergency');
       if (dupE) {
         console.log(`[dispatch] 同長輩已有進行中緊急單，不重複開：task=${dupE}`);
+        broadcastFast('sync', { tables: ['radio_events', 'elders'] });
         return { eventId, taskId: dupE };
       }
       const workerName = await pickWorkerName(sb);
@@ -278,6 +303,8 @@ export function createDispatch() {
         .single();
       if (task.error) console.error('[dispatch] 寫 dispatch_tasks 失敗：', task.error.message);
       else console.log(`[dispatch] ✅ 緊急派遣單已開：event=${eventId} task=${task.data?.id} 就近派給=${assignee || '（全體廣播）'}`);
+      // 次秒級廣播：三端不必等 1~3 秒的 Postgres Changes，收到就立刻抓到這張新緊急單。
+      broadcastFast('sync', { tables: ['radio_events', 'dispatch_tasks', 'elders'] });
       return { eventId, taskId: task.data?.id };
     },
 
@@ -306,6 +333,7 @@ export function createDispatch() {
       const dupS = await existingOpenTaskId(sb, elderIdResolved, 'supply');
       if (dupS) {
         console.log(`[dispatch] 同長輩已有進行中物資單，不重複開：task=${dupS}`);
+        broadcastFast('sync', { tables: ['radio_events'] });
         return { eventId, taskId: dupS };
       }
       // 物資單 3 分鐘寬限：先 offer 給督導志工＋通知家屬，不廣播全體；
@@ -335,7 +363,51 @@ export function createDispatch() {
         .single();
       if (task.error) console.error('[dispatch] 寫 dispatch_tasks 失敗：', task.error.message);
       else console.log(`[dispatch] ✅ 物資派遣單已開：event=${eventId} task=${task.data?.id} items=${(items||[]).join('、')}`);
+      broadcastFast('sync', { tables: ['radio_events', 'dispatch_tasks'] });
       return { eventId, taskId: task.data?.id };
+    },
+
+    /**
+     * 被動感知回報（非長輩主動求助，不進 orchestrator）：
+     *   - activity_report：每日人形活動彙整 → 只更新 elders.last_activity_at
+     *     （家屬端「最後偵測到活動」據此），不寫事件、不派工、無 reply。
+     *   - inactivity_suspected：日間連續 6 小時未偵測到人形 → 把長輩升成「注意」，
+     *     家屬 App／社工後台立即亮「注意」（不派志工）。**只在目前是 normal 時升**，
+     *     絕不覆蓋既有 emergency（避免把真跌倒降級）。
+     * 這兩個事件 event_type_t enum 沒有對應值，硬塞 fall_suspected 會謊報成跌倒，
+     * 因此走 elders 欄位而非 radio_events；回傳是否有實際寫入（dryrun/失敗回 false）。
+     */
+    async recordPresence({ deviceSerial, elderId, event }) {
+      const sb = await client();
+      if (!sb) {
+        console.log('[dispatch:dryrun] presence →', { deviceSerial, elderId, event });
+        return false;
+      }
+      // 用 device_serial 或 elder_id 定位那一列（兩者擇一即可）
+      const match = (q) =>
+        elderId ? q.eq('id', elderId) : q.eq('device_serial', deviceSerial);
+      try {
+        if (event === 'activity_report') {
+          const r = await match(
+            sb.from('elders').update({ last_activity_at: new Date().toISOString() }),
+          );
+          if (r.error) throw r.error;
+          return true;
+        }
+        if (event === 'inactivity_suspected') {
+          // 只升 normal → attention；emergency/attention 維持不動
+          const r = await match(
+            sb.from('elders').update({ severity: 'attention' }).eq('severity', 'normal'),
+          );
+          if (r.error) throw r.error;
+          console.log(`[dispatch] ⚠️ 久未偵測到活動 → 長輩升「注意」（device=${deviceSerial || elderId}）`);
+          broadcastFast('sync', { tables: ['elders'] });
+          return true;
+        }
+      } catch (e) {
+        console.error('[dispatch] recordPresence 失敗：', e.message || e);
+      }
+      return false;
     },
   };
 }

@@ -40,6 +40,17 @@ class _HistoryPageState extends State<HistoryPage> {
           return m.isEmpty ? null : m.first;
         }
 
+        // 一律取「這筆單最近一次的動作時間」當排序／顯示時間：結案→到場→出發→開單裡最新的一個。
+        // 為什麼不用 resolvedAt：seed／匯入資料偶有 resolved_at 早於 created_at 的髒資料，
+        // 只看結案時間會把剛建立的新單排到舊單後面。取 max 保證「最新建立/處理」永遠在最上面。
+        DateTime latestTouch(DispatchTask t) {
+          var d = t.createdAt;
+          for (final x in [t.acceptedAt, t.arrivedAt, t.resolvedAt]) {
+            if (x != null && x.isAfter(d)) d = x;
+          }
+          return d;
+        }
+
         // 真實結案、且「我」接的任務 → ServiceRecord（新到舊）
         final all = (snapshot.data ?? const <DispatchTask>[])
             .where((t) =>
@@ -48,20 +59,22 @@ class _HistoryPageState extends State<HistoryPage> {
             .map((t) {
           final el = elderOf(t.elderId);
           return ServiceRecord(
-            time: t.resolvedAt ?? t.createdAt,
+            time: latestTouch(t),
             elderName: el?.name ?? '長輩',
             address: el?.address ?? '',
             kind: t.kind,
             items: t.items,
-            distanceKm: 1.0,
             durationMin: (t.etaMinutes ?? 10) + 6,
-            rating: 5,
             note: t.note,
             taskId: t.id, // 真實派遣單→可點進歷史聊天
             photoUrl: t.proofPhotoUrl, // 拍照結單的現場證明照
           );
         }).toList()
-          ..sort((a, b) => b.time.compareTo(a.time));
+          // 新到舊；時間相同再以 taskId 穩定排序，避免每次 rebuild 順序跳動。
+          ..sort((a, b) {
+            final c = b.time.compareTo(a.time);
+            return c != 0 ? c : (b.taskId ?? '').compareTo(a.taskId ?? '');
+          });
 
         // 有紀錄的月份（新到舊）供年月篩選；選到的月份若已無資料 → 回「全部」。
         final months = all.map((r) => _key(r.time)).toSet().toList()
@@ -73,7 +86,6 @@ class _HistoryPageState extends State<HistoryPage> {
             : all.where((r) => _key(r.time) == active).toList();
 
         final minutes = records.fold<int>(0, (s, r) => s + r.minutes);
-        final totalKm = records.fold<double>(0, (s, r) => s + r.distanceKm);
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -85,7 +97,6 @@ class _HistoryPageState extends State<HistoryPage> {
               title: active == null ? '服務概況（全部）' : '${_monthLabel(active)} 概況',
               orders: records.length,
               minutes: minutes,
-              km: totalKm,
             ),
             const SizedBox(height: 18),
             Row(
@@ -169,13 +180,11 @@ class _WeekSummary extends StatelessWidget {
     this.title = '本週服務概況',
     required this.orders,
     required this.minutes,
-    required this.km,
   });
 
   final String title;
   final int orders;
   final int minutes;
-  final double km;
 
   @override
   Widget build(BuildContext context) {
@@ -200,8 +209,6 @@ class _WeekSummary extends StatelessWidget {
               _stat('$orders', '完成單數'),
               _divider(),
               _stat(formatServiceMinutes(minutes), '服務時數'),
-              _divider(),
-              _stat(km.toStringAsFixed(1), '總里程 km'),
             ],
           ),
         ],
@@ -374,9 +381,7 @@ class _OrderCard extends StatelessWidget {
               children: [
                 _meta(Icons.schedule, _fmt(record.time)),
                 const SizedBox(width: 14),
-                _meta(Icons.route, '${record.distanceKm} km'),
-                const SizedBox(width: 14),
-                _meta(Icons.timer_outlined, '${record.durationMin} 分'),
+                _meta(Icons.timer_outlined, '服務 ${record.durationMin} 分'),
                 if (tappable) ...[
                   const Spacer(),
                   const Icon(Icons.chat_bubble_outline,

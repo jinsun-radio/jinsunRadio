@@ -140,7 +140,7 @@ class CertificatesPage extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(44),
                   foregroundColor: JinsunColors.blueDeep),
-              onPressed: () => _submitCert(context, cert.kind),
+              onPressed: () => _submitCert(context, cert.kind, cert.status),
               icon: const Icon(Icons.upload_file, size: 18),
               label: Text(cert.status == CertStatus.none ? '送出證件審核' : '更新／重新送審'),
             ),
@@ -152,16 +152,22 @@ class CertificatesPage extends StatelessWidget {
 
   /// 送出／更新一張證件審核。狀態寫成「審核中」，由社工端核可後才生效——
   /// 不再是假的「開發中」死路；有明確的送出與成功／失敗回饋。
-  Future<void> _submitCert(BuildContext context, CertKind kind) async {
+  Future<void> _submitCert(
+      BuildContext context, CertKind kind, CertStatus current) async {
     final messenger = ScaffoldMessenger.of(context);
+    // 重新送審一張「有效」證件會把它退回審核中→暫時失去緊急派遣資格；先提醒，別默默降級。
+    final revalidating = current == CertStatus.valid;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('送出「${kind.label}」審核'),
-        content: const Text(
-          '正式版可在此拍照上傳證件。送出後狀態為「審核中」，'
-          '由社工端核可後才生效；良民證與意外險皆生效後即可承接緊急派遣。',
-          style: TextStyle(height: 1.6),
+        content: Text(
+          revalidating
+              ? '這張「${kind.label}」目前有效。重新送審會退回「審核中」，'
+                  '在社工重新核可前，你將暫時無法承接緊急派遣。確定要更新嗎？'
+              : '正式版可在此拍照上傳證件。送出後狀態為「審核中」，'
+                  '由社工端核可後才生效；良民證與意外險皆生效後即可承接緊急派遣。',
+          style: const TextStyle(height: 1.6),
         ),
         actions: [
           TextButton(

@@ -129,7 +129,7 @@ const server = createServer(async (req, res) => {
   // 回傳可跨源播放的 WAV url。lang=mandarin/taigi（台語能否發音看 ATEN 支不支援）。
   // 打不通就回 502，前端會退回瀏覽器語音（國語），不會沒聲音。
   if (req.method === 'POST' && req.url.split('?')[0] === '/tts') {
-    const b = await readBody(req);
+    const b = await readJson(req);
     const text = (b.text || '').toString().trim();
     const lang = (b.lang || 'mandarin').toString();
     if (!text) return send(400, { error: 'no text' });
@@ -156,6 +156,26 @@ const server = createServer(async (req, res) => {
   // ① 上行：硬體 → server
   if (req.method === 'POST' && req.url === '/voice') {
     const { device_serial, elder_id, text, event } = await readJson(req);
+    // 被動感知回報（activity_report／inactivity_suspected）：不進 orchestrator、無 reply，
+    // 只更新長輩狀態。韌體對這兩者只需 200；早年這裡沒處理，落到下方 400 → 久臥「注意」
+    // 家屬通知從未觸發、activity_report 每天被退。見 docs/requirements/hardware-integration.md §3。
+    if (event === 'activity_report' || event === 'inactivity_suspected') {
+      if (!device_serial && !elder_id) {
+        return send(400, { error: 'need device_serial (or elder_id)' });
+      }
+      try {
+        await orch.dispatch.recordPresence({
+          deviceSerial: device_serial,
+          elderId: elder_id,
+          event,
+        });
+        console.log(`[voice] ${event} device=${device_serial || elder_id}`);
+        return send(200, { ok: true, event });
+      } catch (e) {
+        console.error(e);
+        return send(500, { error: String(e?.message || e) });
+      }
+    }
     const utter = text || EVENT_TEXT[event];
     if (!utter || (!device_serial && !elder_id)) {
       return send(400, { error: 'need text|event and device_serial (or elder_id)' });

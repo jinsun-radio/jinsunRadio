@@ -44,6 +44,7 @@ dependencies:
   http: ^1.2.0          # 取真實道路路線（OSRM）
   url_launcher: ^6.3.0  # 撥號給長輩／志工
   flutter_blue_plus: ^1.32.12  # 收音機藍牙配對 + Wi-Fi 佈建（BLE provisioning）
+  shared_preferences: ^2.5.5  # 提醒設定本地持久化（重開 App 不遺失）
 
 # record 5.1.2 endorse 了壞掉的 record_linux 0.7.2（宣稱相容 platform_interface ^1.0.2，
 # 實際沒實作 1.5+ 的 startStream/hasPermission，害 Android release 全量編譯失敗）。

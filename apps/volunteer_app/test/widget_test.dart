@@ -74,7 +74,8 @@ void main() {
     backend.triggerSos('elder-2');
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('緊急派遣'), findsWidgets);
+    // 卡片標題＝具體事件（SOS／跌倒），不再是籠統「緊急派遣」（見 TaskCard._concreteTitle）。
+    expect(find.text('SOS 緊急求救'), findsWidgets);
     expect(find.text('待接單'), findsWidgets);
     // 接單鍵文案帶 ETA，且分兩種：搶單池是「接單（約 N 分鐘到）」，
     // 督導受邀單是「確認前往（約 N 分鐘到）」。比對共同的尾段，才不會被

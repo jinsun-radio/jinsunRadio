@@ -165,7 +165,25 @@ class SettingsPage extends StatelessWidget {
                   TextButton.styleFrom(foregroundColor: JinsunColors.muted),
               icon: const Icon(Icons.logout, size: 18),
               label: const Text('登出'),
-              onPressed: () => local.logout(),
+              // 誤觸登出會把家屬踢回登入頁、像 App 壞了；先確認一次。
+              onPressed: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (c) => AlertDialog(
+                    title: const Text('要登出嗎？'),
+                    content: const Text('登出後需要重新登入才能收到長輩的通知。'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(c, false),
+                          child: const Text('取消')),
+                      FilledButton(
+                          onPressed: () => Navigator.pop(c, true),
+                          child: const Text('登出')),
+                    ],
+                  ),
+                );
+                if (ok == true) await local.logout();
+              },
             ),
           ],
         ),

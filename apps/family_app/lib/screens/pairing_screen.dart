@@ -196,13 +196,25 @@ class _PairingScreenState extends State<PairingScreen> {
     });
   }
 
+  // 綁定結果：null＝成功；非 null＝bindBySerial 回的錯誤（序號不在已知清單等）。
+  String? _bindError;
+
   Future<void> _finish() async {
-    // 步驟 10：佈建成功 → 以序號綁定長輩（序號讀不到時仍顯示完成，提示手動綁定）。
+    // 步驟 10：佈建成功 → 以序號綁定長輩。綁定可能失敗（序號讀不到／不在清單），
+    // 不能吞掉回傳值就一律報「已綁定」——否則家屬以為家人受保護，實際沒綁上。
     final serial = _serial;
+    String? err;
     if (serial != null && serial.isNotEmpty) {
-      await widget.local.bindBySerial(serial);
+      err = await widget.local.bindBySerial(serial);
+    } else {
+      err = '讀不到收音機序號';
     }
-    if (mounted) setState(() => _step = _Step.done);
+    if (mounted) {
+      setState(() {
+        _bindError = err;
+        _step = _Step.done;
+      });
+    }
   }
 
   void _fail(String msg) {
@@ -434,9 +446,49 @@ class _PairingScreenState extends State<PairingScreen> {
                   .toList()
                 ..sort((a, b) => b.rssi.compareTo(a.rssi));
               if (results.isEmpty) {
-                return const Center(
-                  child: Text('搜尋中…尚未找到收音機（JS- 開頭）',
-                      style: TextStyle(color: JinsunColors.muted)),
+                // 掃描 15 秒會停（radio_ble timeout）；停了還說「搜尋中…」會讓家屬乾等，
+                // 以為程式還在找。依實際掃描狀態切換：停了就給大顆「重新搜尋」按鈕。
+                return StreamBuilder<bool>(
+                  stream: _prov.isScanning,
+                  initialData: true,
+                  builder: (_, s) {
+                    final scanning = s.data ?? false;
+                    if (scanning) {
+                      return const Center(
+                        child: Text('搜尋中…尚未找到收音機（JS- 開頭）',
+                            style: TextStyle(color: JinsunColors.muted)),
+                      );
+                    }
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.search_off,
+                              size: 44, color: JinsunColors.muted),
+                          const SizedBox(height: 12),
+                          const Text('找不到收音機',
+                              style: TextStyle(
+                                  fontSize: 17, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 6),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24),
+                            child: Text(
+                              '請確認收音機已插電、正在閃藍燈（配對模式），並靠近手機，再重新搜尋。',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: 14, color: JinsunColors.muted),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: _beginScan,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('重新搜尋'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               }
               return ListView.separated(
@@ -667,29 +719,33 @@ class _PairingScreenState extends State<PairingScreen> {
     );
   }
 
-  // 步驟 10：完成。
+  // 步驟 10：完成。綁定成功與「連上網但沒綁定」是兩種畫面，不可都報綠色成功。
   Widget _doneView() {
-    final bound = _serial != null && _serial!.isNotEmpty;
+    final bound = _bindError == null;
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(Icons.check_circle, color: Color(0xFF43A047), size: 72),
+        Icon(bound ? Icons.check_circle : Icons.link_off,
+            color: bound ? const Color(0xFF43A047) : const Color(0xFFEF6C00),
+            size: 72),
         const SizedBox(height: 16),
-        const Text('綁定完成！',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+        Text(bound ? '綁定完成！' : '收音機已上網，但尚未綁定',
+            style:
+                const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         Text(
           bound
               ? '收音機（$_serial）已連上 Wi-Fi，並綁定到你的帳號。'
-              : '收音機已連上 Wi-Fi。請到設定頁用序號完成綁定。',
+              : '收音機已連上 Wi-Fi，但綁定沒有成功'
+                  '（$_bindError）。請到「設定 → 新增收音機」用底部序號手動綁定。',
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 14, color: JinsunColors.muted),
         ),
         const SizedBox(height: 28),
         FilledButton(
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('完成'),
+          onPressed: () => Navigator.of(context).pop(bound),
+          child: Text(bound ? '完成' : '去設定頁綁定'),
         ),
       ],
     );

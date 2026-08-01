@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'theme.dart';
 
-/// 金孫收音機品牌標誌（logo 方案 4「科技·照護」）：
-/// 由「溫暖橘」與「科技藍」兩道圓潤的弧帶交扣成一顆心，中央鏤空成心形負空間，
-/// 象徵世代之間相互扶持、科技串聯照護。純 CustomPainter 繪製，任意尺寸皆銳利。
+/// 金孫收音機品牌標誌（正式版）：圓角方形徽章，上半溫暖橘、下半科技藍，
+/// 兩色以一道波浪相接，中央鏤空成白色心形負空間——象徵世代扶持、科技串聯照護。
+/// 幾何直接對應 `docs/assets/jinsun-logo.svg`（viewBox 256），純 CustomPainter 繪製、任意尺寸皆銳利。
 class JinsunLogo extends StatelessWidget {
   const JinsunLogo({super.key, this.size = 48, this.padding = 0});
 
@@ -24,7 +24,7 @@ class JinsunLogo extends StatelessWidget {
   }
 }
 
-/// 圓角方底＋logo，適合當 App 圖示／登入頁的品牌圖騰。
+/// 放大版徽章（含柔和陰影），適合登入頁／App 圖示的品牌圖騰。
 class JinsunLogoBadge extends StatelessWidget {
   const JinsunLogoBadge({super.key, this.size = 96, this.radius = 28});
 
@@ -37,75 +37,91 @@ class JinsunLogoBadge extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFFF6EC), Color(0xFFEFF5FF)],
-        ),
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: JinsunColors.orange.withValues(alpha: 0.18),
+            color: JinsunColors.orange.withValues(alpha: 0.20),
             blurRadius: 22,
             offset: const Offset(0, 10),
           ),
         ],
       ),
-      child: Center(child: JinsunLogo(size: size * 0.62)),
+      // 徽章本身已是圓角實心方塊，直接鋪滿容器。
+      child: JinsunLogo(size: size),
     );
   }
 }
 
+/// 依 `docs/assets/jinsun-logo.svg`（256×256）等比例重繪的品牌徽章。
 class _JinsunLogoPainter extends CustomPainter {
-  /// 標準心形路徑（正規化 0..1，尖端朝下）。
-  Path _heart(Size s, double scale, Offset center) {
-    double x(double nx) => center.dx + (nx - 0.5) * s.width * scale;
-    double y(double ny) => center.dy + (ny - 0.5) * s.height * scale;
-    final p = Path()
-      ..moveTo(x(0.5), y(0.26))
-      ..cubicTo(x(0.42), y(0.06), x(0.03), y(0.10), x(0.05), y(0.40))
-      ..cubicTo(x(0.07), y(0.62), x(0.32), y(0.76), x(0.5), y(0.94))
-      ..cubicTo(x(0.68), y(0.76), x(0.93), y(0.62), x(0.95), y(0.40))
-      ..cubicTo(x(0.97), y(0.10), x(0.58), y(0.06), x(0.5), y(0.26))
-      ..close();
+  // 品牌色（與 SVG、JinsunColors 一致）
+  static const _orange = Color(0xFFFB923C);
+  static const _blue = Color(0xFF3B82F6);
+  static const _base = Color(0xFFF5F6F8);
+
+  /// 把 SVG（0..256 座標）縮放到實際畫布尺寸。
+  Path _scaled(Size size, void Function(Path p, double Function(double), double Function(double)) build) {
+    final k = size.width / 256.0;
+    double sx(double v) => v * k;
+    double sy(double v) => v * (size.height / 256.0);
+    final p = Path();
+    build(p, sx, sy);
     return p;
   }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.52);
-    // 外心 − 內心 ＝ 圓潤的心形環帶
-    final outer = _heart(size, 0.98, center);
-    final inner = _heart(size, 0.44, Offset(center.dx, center.dy + size.height * 0.06));
-    final ring = Path.combine(PathOperation.difference, outer, inner);
+    final k = size.width / 256.0;
+    // 圓角方外框：rect(8,8,240,240) rx=60（SVG frame）。
+    final frame = RRect.fromRectAndRadius(
+      Rect.fromLTWH(8 * k, 8 * k, 240 * k, 240 * (size.height / 256.0)),
+      Radius.circular(60 * k),
+    );
 
-    final cx = size.width / 2;
-    final gap = size.width * 0.045; // 兩色之間的白色縫隙
-
-    // 左半（溫暖橘漸層）
-    final leftClip = Rect.fromLTRB(0, 0, cx - gap / 2, size.height);
     canvas.save();
-    canvas.clipRect(leftClip);
-    final orangePaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFFFFB067), JinsunColors.orange],
-      ).createShader(Offset.zero & size);
-    canvas.drawPath(ring, orangePaint);
-    canvas.restore();
+    canvas.clipRRect(frame);
 
-    // 右半（科技藍漸層）
-    final rightClip = Rect.fromLTRB(cx + gap / 2, 0, size.width, size.height);
-    canvas.save();
-    canvas.clipRect(rightClip);
-    final bluePaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topRight,
-        end: Alignment.bottomLeft,
-        colors: [Color(0xFF7CB0FB), JinsunColors.blue],
-      ).createShader(Offset.zero & size);
-    canvas.drawPath(ring, bluePaint);
+    // 底色（僅防鋸齒邊緣露出；上橘下藍會鋪滿）。
+    canvas.drawRRect(frame, Paint()..color = _base);
+
+    // 溫暖橘：上半（波浪為下緣）
+    final orange = _scaled(size, (p, x, y) {
+      p
+        ..moveTo(x(8), y(8))
+        ..lineTo(x(248), y(8))
+        ..lineTo(x(248), y(118))
+        ..cubicTo(x(210), y(150), x(176), y(124), x(148), y(150))
+        ..cubicTo(x(118), y(178), x(70), y(142), x(8), y(164))
+        ..close();
+    });
+    canvas.drawPath(orange, Paint()..color = _orange..isAntiAlias = true);
+
+    // 科技藍：下半（與橘色共用同一條波浪縫）
+    final blue = _scaled(size, (p, x, y) {
+      p
+        ..moveTo(x(8), y(164))
+        ..cubicTo(x(70), y(142), x(118), y(178), x(148), y(150))
+        ..cubicTo(x(176), y(124), x(210), y(150), x(248), y(118))
+        ..lineTo(x(248), y(248))
+        ..lineTo(x(8), y(248))
+        ..close();
+    });
+    canvas.drawPath(blue, Paint()..color = _blue..isAntiAlias = true);
+
+    // 白色心：中央負空間
+    final heart = _scaled(size, (p, x, y) {
+      p
+        ..moveTo(x(128), y(178))
+        ..cubicTo(x(108), y(150), x(78), y(142), x(78), y(112))
+        ..cubicTo(x(78), y(92), x(96), y(80), x(112), y(90))
+        ..cubicTo(x(120), y(95), x(125), y(103), x(128), y(110))
+        ..cubicTo(x(131), y(103), x(136), y(95), x(144), y(90))
+        ..cubicTo(x(160), y(80), x(178), y(92), x(178), y(112))
+        ..cubicTo(x(178), y(142), x(148), y(150), x(128), y(178))
+        ..close();
+    });
+    canvas.drawPath(heart, Paint()..color = Colors.white..isAntiAlias = true);
+
     canvas.restore();
   }
 

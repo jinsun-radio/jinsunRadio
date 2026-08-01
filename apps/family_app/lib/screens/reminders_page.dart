@@ -162,8 +162,8 @@ class RemindersPage extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 90),
           children: [
-            const Text('設定後即時同步到收音機，長輩會聽到語音提醒（斷網也照常播放）。點提醒可編輯。',
-                style: TextStyle(fontSize: 13, color: JinsunColors.muted)),
+            const Text('設定長輩每日的吃藥、量測提醒，收音機會語音播報。點提醒可編輯、可刪除。',
+                style: TextStyle(fontSize: 13.5, color: JinsunColors.muted)),
             const SizedBox(height: 14),
             ...local.reminders.map((r) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
@@ -214,7 +214,24 @@ class RemindersPage extends StatelessWidget {
                             tooltip: '刪除提醒',
                             icon: const Icon(Icons.delete_outline,
                                 color: JinsunColors.muted),
-                            onPressed: () => local.removeReminder(r),
+                            // 小圖示容易誤觸；刪掉不直接消失，給「復原」5 秒反悔，
+                            // 避免家屬手滑清掉長輩的吃藥提醒又救不回來。
+                            onPressed: () {
+                              final removed = Reminder(
+                                  text: r.text, times: [...r.times]);
+                              final idx = local.removeReminder(r);
+                              final messenger = ScaffoldMessenger.of(context);
+                              messenger.clearSnackBars();
+                              messenger.showSnackBar(SnackBar(
+                                content: Text('已刪除「${removed.text}」提醒'),
+                                duration: const Duration(seconds: 5),
+                                action: SnackBarAction(
+                                  label: '復原',
+                                  onPressed: () =>
+                                      local.restoreReminder(idx, removed),
+                                ),
+                              ));
+                            },
                           ),
                         ],
                       ),

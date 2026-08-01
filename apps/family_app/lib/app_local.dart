@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:jinsun_core/jinsun_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 提醒（App 本地設定，正式版同步到收音機 retained config）
 /// 一則提醒 = 一個標籤（如「吃藥」）＋多個時間（08:00／12:00／18:00），
@@ -78,6 +80,7 @@ class AppLocal extends ChangeNotifier {
       }
     });
     if (auth.currentUser != null) loadBindings();
+    _loadReminders();
   }
 
   final BackendClient backend;
@@ -234,6 +237,7 @@ class AppLocal extends ChangeNotifier {
   void addReminder(List<TimeOfDay> times, String text) {
     reminders.add(Reminder(text: text, times: _sortedTimes(times)));
     _sortReminders();
+    _saveReminders();
     notifyListeners();
   }
 
@@ -241,12 +245,71 @@ class AppLocal extends ChangeNotifier {
     r.times = _sortedTimes(times);
     r.text = text;
     _sortReminders();
+    _saveReminders();
     notifyListeners();
   }
 
-  void removeReminder(Reminder r) {
+  /// 刪除並回傳它原本的位置，供「復原」用（家屬誤刪吃藥提醒能救回來）。
+  int removeReminder(Reminder r) {
+    final idx = reminders.indexOf(r);
     reminders.remove(r);
+    _saveReminders();
     notifyListeners();
+    return idx < 0 ? reminders.length : idx;
+  }
+
+  /// 復原剛刪掉的提醒（放回原位）。
+  void restoreReminder(int index, Reminder r) {
+    final i = index.clamp(0, reminders.length);
+    reminders.insert(i, r);
+    _sortReminders();
+    _saveReminders();
+    notifyListeners();
+  }
+
+  // ---- 提醒本地持久化（重開 App 不遺失；正式版另同步收音機 retained config）----
+  static const _remindersKey = 'jinsun_reminders_v1';
+
+  Future<void> _loadReminders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_remindersKey);
+      if (raw == null) return; // 沒存過 → 保留預設種子提醒
+      final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
+      reminders
+        ..clear()
+        ..addAll(list.map((m) => Reminder(
+              text: m['text'] as String,
+              times: (m['times'] as List)
+                  .cast<String>()
+                  .map((s) {
+                    final p = s.split(':');
+                    return TimeOfDay(
+                        hour: int.parse(p[0]), minute: int.parse(p[1]));
+                  })
+                  .toList(),
+            )));
+      _sortReminders();
+      notifyListeners();
+    } catch (_) {
+      // 讀取／解析失敗 → 保留現有提醒，不讓壞資料清空畫面
+    }
+  }
+
+  Future<void> _saveReminders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = reminders
+          .map((r) => {
+                'text': r.text,
+                'times': r.times
+                    .map((t) =>
+                        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}')
+                    .toList(),
+              })
+          .toList();
+      await prefs.setString(_remindersKey, jsonEncode(data));
+    } catch (_) {}
   }
 
   // ---- 日/週/月統計（真實資料：radio_events 的每日事件計數，只算主要綁定長輩） ----
