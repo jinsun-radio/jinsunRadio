@@ -1,0 +1,264 @@
+/* jinsun-proposal — orange↔blue gradient pitch (built on pitch-deck) */
+.tpl-pitch-deck{
+  --bg:#ffffff;--bg-soft:#faf7f3;--surface:#ffffff;--surface-2:#f5f1ec;
+  --border:rgba(40,30,20,.09);--border-strong:rgba(40,30,20,.18);
+  --text-1:#1c1712;--text-2:#5a5147;--text-3:#9a8f82;
+  /* 藍作為可讀強調（kicker / num-tag，白底 ≥4.5:1）；橘作為第三強調 */
+  --accent:#0E6EA8;--accent-2:#8a4bd6;--accent-3:#F96C1A;
+  /* 漸層橘 → 藍（大氣主視覺：mega 標題、數字、色塊、按鈕、頭像皆吃這個） */
+  --grad:linear-gradient(120deg,#FFB14D 0%,#F96C1A 42%,#1E88D6 100%);
+  --grad-soft:linear-gradient(135deg,#FFF3E9 0%,#FDEEE2 45%,#E7F3FB 100%);
+  --radius:20px;--radius-lg:28px;
+  --shadow:0 14px 40px rgba(60,40,20,.08),0 2px 8px rgba(60,40,20,.04);
+  font-family:'Inter','Noto Sans SC','Noto Sans TC','PingFang TC',sans-serif;
+}
+.tpl-pitch-deck .slide{padding:44px 90px 74px;display:flex;flex-direction:column;justify-content:flex-start}
+.tpl-pitch-deck .kicker{color:var(--accent);font-weight:700;letter-spacing:.06em}
+.tpl-pitch-deck .h1{font-size:82px;line-height:1.06;font-weight:900;letter-spacing:-.03em}
+.tpl-pitch-deck .h2{font-size:46px;font-weight:800;letter-spacing:-.025em;line-height:1.1}
+.tpl-pitch-deck .mega{font-size:150px;font-weight:900;line-height:.95;letter-spacing:-.04em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tpl-pitch-deck .mega-sub{font-size:26px;color:var(--text-2);margin-top:18px}
+.tpl-pitch-deck .gradient-text{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tpl-pitch-deck .cover-bg{position:absolute;inset:0;background:var(--grad-soft);z-index:-1}
+.tpl-pitch-deck .cover-blob{position:absolute;right:-140px;top:-140px;width:560px;height:560px;border-radius:50%;background:var(--grad);filter:blur(10px);opacity:.30;z-index:-1}
+.tpl-pitch-deck .cover-blob.b2{right:auto;left:-180px;top:auto;bottom:-200px;width:460px;height:460px;opacity:.18}
+.tpl-pitch-deck .brand-dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--grad);margin-right:10px;vertical-align:middle}
+.tpl-pitch-deck .brand{font-weight:800;font-size:22px;letter-spacing:-.02em}
+.tpl-pitch-deck .card{border-radius:var(--radius)}
+.tpl-pitch-deck .card h4{font-size:23px;font-weight:800;margin-bottom:8px}
+.tpl-pitch-deck .num-tag{font-family:'Inter',sans-serif;font-size:14px;font-weight:800;color:var(--accent-3);letter-spacing:.14em}
+.tpl-pitch-deck .metric{display:flex;flex-direction:column;gap:6px}
+.tpl-pitch-deck .metric .n{font-size:62px;font-weight:900;letter-spacing:-.03em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1}
+.tpl-pitch-deck .metric .l{color:var(--text-2);font-size:16px;line-height:1.4}
+.tpl-pitch-deck .ask-box{background:var(--grad);color:#fff;padding:52px 60px;border-radius:var(--radius-lg);box-shadow:0 30px 70px rgba(249,108,26,.30)}
+.tpl-pitch-deck .ask-box .h2{color:#fff}
+.tpl-pitch-deck .ask-box .dim,.tpl-pitch-deck .ask-box .lede{color:rgba(255,255,255,.92)}
+.tpl-pitch-deck .lane{border-radius:var(--radius);padding:26px 24px;border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow)}
+.tpl-pitch-deck .lane .tag{display:inline-block;font-size:22px;font-weight:900;margin-bottom:10px}
+.tpl-pitch-deck .lane p{color:var(--text-2);font-size:16.5px;line-height:1.5}
+.tpl-pitch-deck .lane.red{border-top:4px solid #E5484D}
+.tpl-pitch-deck .lane.amber{border-top:4px solid #F5A623}
+.tpl-pitch-deck .lane.green{border-top:4px solid #2E9E5B}
+.tpl-pitch-deck .phase{border-radius:var(--radius);padding:24px 22px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow)}
+.tpl-pitch-deck .phase .pn{font-size:15px;font-weight:900;color:var(--accent-3);letter-spacing:.08em}
+.tpl-pitch-deck .phase h4{font-size:21px;font-weight:800;margin:6px 0 6px}
+.tpl-pitch-deck .phase p{color:var(--text-2);font-size:15px;line-height:1.5}
+.tpl-pitch-deck .phase.done{background:linear-gradient(135deg,#FFF3E9,#EAF4FC)}
+.tpl-pitch-deck .badge-done{display:inline-block;font-size:12px;font-weight:800;color:#fff;background:var(--accent-3);border-radius:999px;padding:2px 10px;margin-left:8px}
+.tpl-pitch-deck .section-num{font-size:190px;font-weight:900;line-height:.9;color:var(--surface-2);position:absolute;right:60px;bottom:30px;z-index:0;letter-spacing:-.05em}
+.tpl-pitch-deck .slide > *{position:relative;z-index:1}
+.tpl-pitch-deck .slide > .section-num{position:absolute;z-index:0}
+.tpl-pitch-deck .deck-footer{color:var(--text-3)}
+.tpl-pitch-deck .pill-accent{background:color-mix(in srgb,var(--accent-3) 14%,transparent);color:var(--accent-3);border-color:color-mix(in srgb,var(--accent-3) 30%,transparent);font-size:15px;padding:8px 18px;font-weight:700}
+
+/* ---- technical slides: flow / architecture / steps ---- */
+.tpl-pitch-deck .flow{display:flex;gap:12px;flex-wrap:wrap}
+.tpl-pitch-deck .step{flex:1 1 150px;min-width:150px;border:1px solid var(--border);border-radius:14px;padding:15px 16px;background:var(--surface);box-shadow:var(--shadow)}
+.tpl-pitch-deck .step .sn{font-size:13px;font-weight:900;color:var(--accent-3);letter-spacing:.06em}
+.tpl-pitch-deck .step h5{font-size:17px;font-weight:800;margin:4px 0 5px}
+.tpl-pitch-deck .step p{font-size:14px;color:var(--text-2);line-height:1.45}
+.tpl-pitch-deck .arch{display:flex;flex-direction:column;gap:12px}
+.tpl-pitch-deck .arch-row{border:1px solid var(--border);border-radius:16px;padding:16px 22px;background:var(--surface);box-shadow:var(--shadow)}
+.tpl-pitch-deck .arch-row .rt{font-size:18px;font-weight:800;margin-bottom:10px}
+.tpl-pitch-deck .arch-row .rt small{font-weight:600;color:var(--text-2);font-size:14px;margin-left:8px}
+.tpl-pitch-deck .arch-row.mid{background:linear-gradient(135deg,#FFF6EE,#EAF4FC);border-color:color-mix(in srgb,var(--accent-3) 22%,transparent)}
+.tpl-pitch-deck .svc-row{display:flex;flex-wrap:wrap;gap:9px}
+.tpl-pitch-deck .svc{font-size:14.5px;font-weight:700;padding:7px 13px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-1)}
+.tpl-pitch-deck .svc.aws{background:color-mix(in srgb,var(--accent-3) 12%,#ffffff);border-color:color-mix(in srgb,var(--accent-3) 32%,transparent);color:#9a4a08}
+.tpl-pitch-deck .arch-conn{text-align:center;color:var(--accent);font-weight:800;font-size:14px;letter-spacing:.02em}
+.tpl-pitch-deck .demo-note{margin-top:22px;background:var(--surface-2);border:1px dashed var(--border-strong);border-radius:14px;padding:16px 20px;font-size:16px;color:var(--text-2);line-height:1.5}
+.tpl-pitch-deck .demo-note b{color:var(--text-1)}
+.tpl-pitch-deck .step-num{width:38px;height:38px;flex:0 0 38px;border-radius:50%;background:var(--grad);color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:18px}
+.tpl-pitch-deck .setup-row{display:flex;align-items:flex-start;gap:16px;padding:16px 0;border-top:1px solid var(--border)}
+.tpl-pitch-deck .setup-row:first-of-type{border-top:none}
+.tpl-pitch-deck .setup-row h5{font-size:19px;font-weight:800;margin-bottom:3px}
+.tpl-pitch-deck .setup-row p{color:var(--text-2);font-size:15.5px;line-height:1.45}
+
+/* ---- visuals: split layout, media, charts, icon badges ---- */
+.tpl-pitch-deck .split{display:grid;grid-template-columns:1.04fr .96fr;gap:40px;align-items:center;margin-top:20px}
+.tpl-pitch-deck .split.tight{grid-template-columns:1.15fr .85fr}
+.tpl-pitch-deck .visual img,.tpl-pitch-deck .visual video{width:100%;height:auto;display:block;border-radius:20px;box-shadow:0 24px 60px rgba(60,40,20,.16)}
+.tpl-pitch-deck .figcap{font-size:13px;color:var(--text-3);margin-top:8px;text-align:center}
+.tpl-pitch-deck .icon-badge{width:130px;height:130px;border-radius:30px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:64px;box-shadow:0 22px 55px rgba(249,108,26,.28);margin:0 auto}
+.tpl-pitch-deck .icon-strip{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+.tpl-pitch-deck .ic{width:78px;height:78px;border-radius:20px;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:38px;box-shadow:var(--shadow)}
+.tpl-pitch-deck .chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:18px 20px;box-shadow:var(--shadow)}
+.tpl-pitch-deck .chart-wrap svg{width:100%;height:auto;display:block}
+.tpl-pitch-deck .ct{font-size:15px;font-weight:800;margin-bottom:6px}
+.tpl-pitch-deck .bom{width:100%;border-collapse:collapse;font-size:15px}
+.tpl-pitch-deck .bom td{padding:7px 6px;border-bottom:1px solid var(--border);color:var(--text-2)}
+.tpl-pitch-deck .bom td.v{text-align:right;font-weight:800;color:var(--text-1);font-variant-numeric:tabular-nums}
+.tpl-pitch-deck .bom tr.sum td{border-top:2px solid var(--border-strong);border-bottom:none;color:var(--text-1);font-weight:800;font-size:16px}
+.tpl-pitch-deck .bom tr.price td{color:var(--accent-3);font-weight:900}
+
+/* ---- four-endpoint quadrants + hub ---- */
+.tpl-pitch-deck .quad{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:14px}
+.tpl-pitch-deck .qcell{border:1px solid var(--border);border-radius:18px;padding:15px 20px;background:var(--surface);box-shadow:var(--shadow)}
+.tpl-pitch-deck .qcell.vol{border:1px solid color-mix(in srgb,var(--accent-3) 40%,transparent);background:linear-gradient(135deg,#FFF6EE,#EAF4FC)}
+.tpl-pitch-deck .qcell h4{font-size:21px;font-weight:800;display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.tpl-pitch-deck .qcell h4 .new{font-size:11px;font-weight:800;color:#fff;background:var(--accent-3);border-radius:999px;padding:2px 9px}
+.tpl-pitch-deck .qpain{color:#b23b2e;font-size:14.5px;font-weight:700;margin-bottom:5px}
+.tpl-pitch-deck .qfix{color:var(--text-2);font-size:15px;line-height:1.5}
+.tpl-pitch-deck .qfix b{color:var(--accent);font-weight:800}
+.tpl-pitch-deck .three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:22px}
+
+/* ---- role cards with person images ---- */
+.tpl-pitch-deck .rgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:16px}
+.tpl-pitch-deck .rcard{border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.tpl-pitch-deck .rcard.vol{border:2px solid var(--accent-3)}
+.tpl-pitch-deck .ravatar{height:128px;background-size:cover;background-position:center top}
+.tpl-pitch-deck .rbody{padding:14px 16px 16px}
+.tpl-pitch-deck .rbody h4{font-size:19px;font-weight:800;margin-bottom:9px;display:flex;align-items:center;gap:7px}
+.tpl-pitch-deck .rbody h4 .new{font-size:10px;font-weight:800;color:#fff;background:var(--accent-3);border-radius:999px;padding:2px 7px}
+.tpl-pitch-deck .rbody ul{list-style:none}
+.tpl-pitch-deck .rbody li{font-size:13px;color:#b23b2e;font-weight:700;line-height:1.4;margin-bottom:6px}
+.tpl-pitch-deck .rbody li .ar{color:var(--accent-3);font-weight:900;margin:0 3px}
+.tpl-pitch-deck .rbody li b{color:var(--accent);font-weight:800}
+/* ---- segmentation cards (主要/次要) ---- */
+.tpl-pitch-deck .segcard{border:1px solid var(--border);border-radius:20px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.tpl-pitch-deck .segcard .simg{height:236px;background:#f3ede3;background-size:contain;background-repeat:no-repeat;background-position:center}
+.tpl-pitch-deck .segcard .sbody{padding:18px 22px}
+.tpl-pitch-deck .segcard .stag{font-size:13px;font-weight:800;color:var(--accent-3);letter-spacing:.06em}
+.tpl-pitch-deck .segcard h4{font-size:24px;font-weight:800;margin:4px 0 6px}
+.tpl-pitch-deck .segcard p{font-size:15.5px;color:var(--text-2);line-height:1.5}
+
+/* ---- full-bleed four-quadrant with person backgrounds ---- */
+.tpl-pitch-deck .slide.fourfull{padding:0}
+.tpl-pitch-deck .ffgrid{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.tpl-pitch-deck .ffcell{position:relative;background-size:cover;background-position:center 30%;overflow:hidden}
+.tpl-pitch-deck .ffcell.vol{outline:5px solid var(--accent-3);outline-offset:-5px}
+.tpl-pitch-deck .ffcell .scrim{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:24px 32px 26px;
+  background:linear-gradient(to top,rgba(16,11,7,.95) 0%,rgba(16,11,7,.82) 46%,rgba(16,11,7,.3) 78%,rgba(16,11,7,0) 100%)}
+.tpl-pitch-deck .ffcell h4{color:#fff;font-size:26px;font-weight:900;display:flex;align-items:center;gap:9px;margin-bottom:11px}
+.tpl-pitch-deck .ffcell h4 .new{font-size:12px;background:var(--accent-3);color:#fff;border-radius:999px;padding:2px 10px;font-weight:800}
+.tpl-pitch-deck .ffcell ul{list-style:none}
+.tpl-pitch-deck .ffcell li{color:#fff;font-size:15px;font-weight:600;line-height:1.5;margin-bottom:10px;padding-left:2px;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.tpl-pitch-deck .ffcell li .ar{color:#FFB14D;margin:0 4px;font-weight:900}
+.tpl-pitch-deck .ffcell li .ar{color:#FFB14D;margin:0 5px;font-weight:900}
+.tpl-pitch-deck .ffcell li b{color:#9fd6ff;font-weight:800}
+.tpl-pitch-deck .fftitle{position:absolute;top:24px;left:50%;transform:translateX(-50%);z-index:6;
+  background:rgba(255,255,255,.94);border-radius:14px;padding:10px 22px;box-shadow:0 10px 30px rgba(0,0,0,.25);text-align:center}
+.tpl-pitch-deck .fftitle b{font-size:24px;font-weight:900;color:var(--text-1)}
+.tpl-pitch-deck .fftitle b .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tpl-pitch-deck .ffnum{position:absolute;bottom:16px;right:20px;z-index:6;color:rgba(255,255,255,.7);font-size:14px;font-weight:700}
+/* small stat rows (no big numbers) */
+.tpl-pitch-deck .srow{display:flex;align-items:center;gap:12px;padding:6px 0;border-top:1px solid var(--border)}
+.tpl-pitch-deck .srow:first-child{border-top:none}
+.tpl-pitch-deck .srow .si{font-size:24px;line-height:1}
+.tpl-pitch-deck .srow h5{font-size:17px;font-weight:800;margin-bottom:2px}
+.tpl-pitch-deck .srow p{font-size:14.5px;color:var(--text-2);line-height:1.45}
+.tpl-pitch-deck .srow p b{color:var(--accent);font-weight:800}
+
+/* ---- app screenshots row ---- */
+.tpl-pitch-deck .appgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-top:14px;align-items:start}
+.tpl-pitch-deck .appshot{text-align:center}
+.tpl-pitch-deck .appshot img{width:100%;height:auto;border-radius:16px;box-shadow:0 16px 40px rgba(60,40,20,.18);border:1px solid var(--border)}
+.tpl-pitch-deck .appshot .cap{margin-top:10px;font-weight:800;font-size:17px}
+.tpl-pitch-deck .appshot .sub{font-size:12.5px;color:var(--text-2)}
+.tpl-pitch-deck .noteban{margin-top:16px;background:var(--surface-2);border-radius:14px;padding:13px 20px;font-size:15.5px;color:var(--text-2);text-align:center}
+.tpl-pitch-deck .noteban b{color:var(--accent-3);font-weight:800}
+/* ---- demo row with real device photo ---- */
+.tpl-pitch-deck .demorow{display:flex;gap:20px;align-items:center;margin-top:18px}
+.tpl-pitch-deck .demorow .dn{flex:1}
+.tpl-pitch-deck .demorow img{width:190px;height:auto;border-radius:14px;box-shadow:var(--shadow)}
+/* ---- client rows (主要/次要 with thumb) ---- */
+.tpl-pitch-deck .crow{display:flex;gap:16px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);margin-bottom:14px}
+.tpl-pitch-deck .crow.vol{border:2px solid var(--accent-3)}
+.tpl-pitch-deck .crow img{width:104px;height:104px;object-fit:cover;border-radius:12px;flex:0 0 104px}
+.tpl-pitch-deck .crow .ct2{font-size:13px;font-weight:800;color:var(--accent-3);letter-spacing:.04em}
+.tpl-pitch-deck .crow h5{font-size:20px;font-weight:800;margin:2px 0 4px}
+.tpl-pitch-deck .crow p{font-size:14.5px;color:var(--text-2);line-height:1.45}
+.tpl-pitch-deck .crow p b{color:var(--accent);font-weight:800}
+
+/* ---- logo lockup + cover images ---- */
+.tpl-pitch-deck .logo{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.tpl-pitch-deck .logo .lw{font-size:26px;font-weight:900;color:var(--text-1);letter-spacing:-.01em}
+.tpl-pitch-deck .covimgs{position:relative;width:100%;padding-bottom:18px}
+.tpl-pitch-deck .cov-radio{width:100%;border-radius:20px;box-shadow:0 24px 60px rgba(60,40,20,.18);display:block}
+.tpl-pitch-deck .cov-app{position:absolute;right:-4px;bottom:-6px;width:120px;border-radius:16px;box-shadow:0 16px 40px rgba(0,0,0,.24);border:4px solid #fff}
+.tpl-pitch-deck .src{font-size:12px;color:var(--text-3);margin-top:8px}
+
+.tpl-pitch-deck .pdico{width:46px;height:46px;flex:0 0 46px;border-radius:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(0,0,0,.14)}
+
+.tpl-pitch-deck .pdgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.tpl-pitch-deck .pdcell{border:1px solid var(--border);border-radius:14px;padding:11px 13px;background:var(--surface);box-shadow:var(--shadow)}
+.tpl-pitch-deck .pdcell .pdico{width:40px;height:40px;flex:none;border-radius:11px;margin-bottom:9px;box-shadow:0 4px 12px rgba(0,0,0,.13)}
+.tpl-pitch-deck .pdcell h6{font-size:16px;font-weight:800;margin:0 0 4px;color:var(--text-1)}
+.tpl-pitch-deck .pdcell p{font-size:13px;color:var(--text-2);line-height:1.4}
+
+/* ---- video hero + demo link + hardware ---- */
+.tpl-pitch-deck .videobox{position:relative;width:100%;aspect-ratio:16/10;background-size:cover;background-position:center;border-radius:20px;box-shadow:0 24px 60px rgba(60,40,20,.2);overflow:hidden}
+.tpl-pitch-deck .videobox::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.5),rgba(0,0,0,.05))}
+.tpl-pitch-deck .videobox .playbtn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:78px;height:78px;border-radius:50%;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-size:30px;z-index:2;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.tpl-pitch-deck .videobox .vlabel{position:absolute;left:18px;bottom:15px;color:#fff;font-weight:800;font-size:15px;z-index:2;text-shadow:0 1px 4px rgba(0,0,0,.5)}
+.tpl-pitch-deck .demolink{display:inline-block;margin-top:20px;background:var(--grad);color:#fff;font-weight:800;padding:11px 22px;border-radius:999px;box-shadow:0 12px 28px rgba(249,108,26,.3);text-decoration:none;font-size:16px}
+
+.tpl-pitch-deck .pdcell .pdfig{width:100%;height:60px;border-radius:9px;overflow:hidden;margin-bottom:8px;border:1px solid var(--border)}
+.tpl-pitch-deck .pdcell .pdfig svg,.tpl-pitch-deck .pdcell .pdfig img{width:100%;height:100%;display:block;object-fit:cover}
+.tpl-pitch-deck .pdcell h6{font-size:15.5px;font-weight:800;margin:0 0 3px}
+.tpl-pitch-deck .pdcell p{font-size:12.5px}
+
+/* ---- v13: 三端困擾 3-col, 四端 App photo columns, growth+funnel ---- */
+.tpl-pitch-deck .pain3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:14px}
+.tpl-pitch-deck .paincell{border:1px solid var(--border);border-radius:16px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.tpl-pitch-deck .paincell .pimg{height:150px;background-size:cover;background-position:center 28%}
+.tpl-pitch-deck .paincell .pbody{padding:13px 15px}
+.tpl-pitch-deck .paincell h5{font-size:19px;font-weight:800;margin-bottom:6px}
+.tpl-pitch-deck .paincell li{list-style:none;font-size:13.5px;color:#b23b2e;font-weight:700;line-height:1.45;margin-bottom:4px}
+.tpl-pitch-deck .relnote{margin-top:14px;display:flex;align-items:center;gap:16px;background:var(--surface-2);border-radius:14px;padding:10px 16px}
+.tpl-pitch-deck .relnote img{width:150px;border-radius:10px}
+.tpl-pitch-deck .relnote p{font-size:15px;color:var(--text-2);line-height:1.5}
+.tpl-pitch-deck .relnote p b{color:var(--accent-3)}
+.tpl-pitch-deck .appq{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px}
+.tpl-pitch-deck .appqcell{position:relative;border-radius:16px;overflow:hidden;background-size:cover;background-position:center;padding:16px 10px 12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-height:534px}
+.tpl-pitch-deck .appqcell::before{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(12,9,6,.72),rgba(12,9,6,.25))}
+.tpl-pitch-deck .appqcell img{position:relative;z-index:2;width:92%;border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.4);margin-bottom:10px}
+
+/* ---- v14: 圖表放大／滿版 ---- */
+/* slide 2: 兩張圖等高並拉高、填滿整張投影片高度 */
+.tpl-pitch-deck .s2big{flex:1;align-items:stretch;margin-top:16px;margin-bottom:8px;min-height:0}
+.tpl-pitch-deck .s2big .chart-wrap{display:flex;flex-direction:column;justify-content:center;padding:20px 22px;min-height:0}
+.tpl-pitch-deck .s2big .chart-wrap svg{flex:1;min-height:0}
+/* slide 9: AWS 架構圖整體加高、字級加大（仍需一頁裝得下、AWS 服務一排不換行） */
+.tpl-pitch-deck .arch{gap:13px}
+.tpl-pitch-deck .arch-row{padding:17px 26px}
+.tpl-pitch-deck .arch-row .rt{font-size:20px;margin-bottom:11px}
+.tpl-pitch-deck .arch-row .rt small{font-size:14.5px}
+.tpl-pitch-deck .svc-row{gap:9px}
+.tpl-pitch-deck .svc{font-size:15px;padding:9px 14px}
+.tpl-pitch-deck .arch-conn{font-size:15.5px;padding:1px 0}
+.tpl-pitch-deck .demo-note{margin-top:16px}
+.tpl-pitch-deck .appqcell .qcap{position:relative;z-index:2;color:#fff;font-weight:800;font-size:16px;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.tpl-pitch-deck .appqcell .qsub{position:relative;z-index:2;color:rgba(255,255,255,.9);font-size:12px;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+
+/* ---- v15: P3 三端困擾／P5 四端畫面 全幅情境圖（比照 P4）---- */
+/* 共用頂部浮動標題膠囊 */
+.tpl-pitch-deck .tfhead{position:absolute;top:20px;left:50%;transform:translateX(-50%);z-index:6;width:min(90%,1080px);
+  background:rgba(255,255,255,.95);border-radius:16px;padding:14px 26px;box-shadow:0 12px 34px rgba(0,0,0,.3);text-align:center}
+.tpl-pitch-deck .tfhead > b{font-size:30px;font-weight:900;color:var(--text-1)}
+.tpl-pitch-deck .tfhead > b .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tpl-pitch-deck .tfnote{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.tpl-pitch-deck .tfnote img{width:64px;border-radius:8px}
+.tpl-pitch-deck .tfnote span{font-size:14.5px;color:var(--text-2);line-height:1.45;text-align:left}
+.tpl-pitch-deck .tfnote b{color:var(--accent-3)}
+.tpl-pitch-deck .tfnote2{margin-top:7px;padding-top:7px;border-top:1px solid var(--border);font-size:14.5px;color:var(--text-2);line-height:1.4}
+.tpl-pitch-deck .tfnote2 b{color:var(--accent-3);font-weight:800}
+/* P3：全幅三分割 */
+.tpl-pitch-deck .slide.threefull{padding:0}
+.tpl-pitch-deck .tfgrid{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr 1fr}
+.tpl-pitch-deck .tfcell{position:relative;background-size:cover;background-position:center 26%;overflow:hidden}
+.tpl-pitch-deck .tfcell + .tfcell{box-shadow:-1px 0 0 rgba(255,255,255,.14)}
+.tpl-pitch-deck .tfcell .scrim{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:30px 30px 36px;
+  background:linear-gradient(to top,rgba(16,11,7,.93) 0%,rgba(16,11,7,.55) 30%,rgba(16,11,7,0) 60%)}
+.tpl-pitch-deck .tfcell h4{color:#fff;font-size:28px;font-weight:900;margin-bottom:12px;display:flex;align-items:center;gap:9px}
+.tpl-pitch-deck .tfcell ul{list-style:none}
+.tpl-pitch-deck .tfcell li{color:#fff;font-size:18px;font-weight:700;line-height:1.45;margin-bottom:9px;padding-left:20px;position:relative;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.tpl-pitch-deck .tfcell li::before{content:"";position:absolute;left:0;top:8px;width:9px;height:9px;border-radius:50%;background:#ff6a52}
+/* P5：全幅四分割（App 截圖疊在情境圖上）*/
+.tpl-pitch-deck .slide.appqfull{padding:0}
+.tpl-pitch-deck .appqg{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr)}
+.tpl-pitch-deck .appqg .appqcell{border-radius:0;min-height:0;padding:150px 12px 22px;justify-content:flex-start;gap:8px}
+.tpl-pitch-deck .appqg .appqcell + .appqcell{box-shadow:-1px 0 0 rgba(255,255,255,.14)}
+.tpl-pitch-deck .appqg .appqcell img{width:88%;margin-bottom:6px}
+.tpl-pitch-deck .appqg .appqcell .qcap{font-size:17px}
+.tpl-pitch-deck .appqg .appqcell .qsub{font-size:12.5px}
