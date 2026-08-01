@@ -18,82 +18,129 @@
       <div>
         <div class="logo"><svg width="36" height="36" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="hl" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#F96C1A"/><stop offset="1" stop-color="#1E88D6"/></linearGradient></defs><path d="M12 20.3l-1.3-1.2C6 14.9 3 12.2 3 8.9 3 6.3 5 4.4 7.5 4.4c1.5 0 2.9.7 3.8 1.9.9-1.2 2.3-1.9 3.8-1.9C20.6 4.4 22 6.3 22 8.9c0 3.3-3 6-7.7 10.2L12 20.3z" fill="url(#hl)"/></svg><span class="lw">金孫收音機</span></div>
         <p class="kicker">台灣十年提案 · 智慧照護與居家健康</p>
-        <h1 class="h1 anim-fade-up" data-anim="fade-up">獨居長輩出事沒人知，<br><span class="gradient-text">社工卻在銳減</span>。</h1>
+        <h1 class="h1 anim-fade-up" data-anim="fade-up">獨居長輩出事沒人知，<br><span class="gradient-text">能到場的人卻不夠</span>。</h1>
         <p class="lede mt-m"><b>時間銀行</b>＋<b>國台語都能通</b>的金孫收音機——讓長輩的需求只要<b>講一句話</b>，就能像 Uber 點餐一樣被接住。</p>
-        <a class="demolink" href="#">▶ Live Demo 影片・連結待補</a>
+        <div class="statstrip">
+          <div><b>20.1%</b><span>台灣每 5 人就有 1 位 65 歲以上長輩<br>467 萬人・2025 年底正式進入超高齡社會</span></div>
+          <div><b>70 萬人</b><span>獨居、或僅與 65 歲以上伴侶同住的長者<br>衛福部 2026 年 6 月</span></div>
+          <div><b>93%</b><span>台北市 5 萬名獨居長輩中，僅 3,598 人配有緊急求助設備<br>其餘<b>出事只能靠鄰居聞到味道</b></span></div>
+        </div>
+        <a class="demolink" href="#">▶ 2 分鐘情境影片・連結待補</a>
       </div>
       <div class="videobox" style="background-image:url(img/dev_real.jpg)">
         <div class="playbtn">▶</div>
         <div class="vlabel">Live Demo 影片</div>
       </div>
     </div>
-    <div class="deck-footer"><span>2026 AI 創新獎</span><span class="slide-number" data-current="1" data-total="12"></span></div>
+    <div class="deck-footer"><span>2026 AI 創新獎</span><span class="slide-number" data-current="1" data-total="14"></span></div>
   </section>
 
   <!-- 2. 問題 · 規模：老年人口增長 + 漏斗 -->
   <section class="slide" data-title="規模">
     <span class="section-num">01</span>
     <p class="num-tag">問題 · 規模</p>
-    <h2 class="h2 mt-s">老年人口十年增百萬，<span class="gradient-text">20 萬獨居長輩</span>最需守護。</h2>
+    <h2 class="h2 mt-s">每 5 個台灣人就有 1 位長輩，<span class="gradient-text">70 萬人獨居</span>。</h2>
     <div class="split s2big">
       <div class="chart-wrap">
-        <div class="ct">台灣 65 歲以上人口（萬人）· 國發會推估</div>
-        <svg viewBox="0 0 500 470" preserveAspectRatio="xMidYMid meet" role="img" aria-label="十年老年人口增長">
+        <div class="ct">65 歲以上人口（萬人）與占總人口比率</div>
+        <svg viewBox="0 0 500 470" preserveAspectRatio="xMidYMid meet" role="img" aria-label="老年人口與占比趨勢">
           <defs><linearGradient id="gG" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#F96C1A" stop-opacity=".16"/><stop offset="1" stop-color="#1E88D6" stop-opacity=".05"/></linearGradient>
           <linearGradient id="gGL" x1="0" x2="1"><stop offset="0" stop-color="#F96C1A"/><stop offset="1" stop-color="#1E88D6"/></linearGradient></defs>
           <line x1="60" y1="420" x2="470" y2="420" class="axis"/>
-          <polygon points="90,370 220,285 350,190 460,120 460,420 90,420" fill="url(#gG)"/>
-          <polyline fill="none" stroke="url(#gGL)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" points="90,370 220,285 350,190 460,120"/>
+          <polygon points="95,213 290,88 450,111 450,420 95,420" fill="url(#gG)"/>
+          <polyline fill="none" stroke="url(#gGL)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" points="95,213 290,88 450,111"/>
           <g text-anchor="middle">
-            <circle cx="90" cy="370" r="7" fill="#F96C1A"/><text x="90" y="352" class="val" font-size="20">466</text><text x="90" y="452" class="lbl" font-size="16">2025</text>
-            <circle cx="220" cy="285" r="7" fill="#e07a2a"/><text x="220" y="267" class="val" font-size="20">520</text><text x="220" y="452" class="lbl" font-size="16">2030</text>
-            <circle cx="350" cy="190" r="7" fill="#3b86c0"/><text x="350" y="172" class="val" font-size="20">580</text><text x="350" y="452" class="lbl" font-size="16">2035</text>
-            <circle cx="460" cy="120" r="8" fill="#1E88D6"/><text x="460" y="102" class="val" font-size="20">600+</text><text x="460" y="452" class="lbl" font-size="16">2040</text>
+            <circle cx="95" cy="213" r="8" fill="#F96C1A"/>
+            <text x="95" y="172" class="val" font-size="30" fill="#F96C1A" font-weight="900">20.1%</text>
+            <text x="95" y="197" class="val" font-size="19">467 萬人</text>
+            <text x="95" y="452" class="lbl" font-size="16">2025 實際</text>
+            <circle cx="290" cy="88" r="7" fill="#9a6fa0"/>
+            <text x="290" y="68" class="lbl" font-size="16" font-weight="800">老年人口達高峰</text>
+            <text x="290" y="452" class="lbl" font-size="16">2050</text>
+            <circle cx="450" cy="111" r="8" fill="#1E88D6"/>
+            <text x="450" y="70" class="val" font-size="30" fill="#1E88D6" font-weight="900">46.5%</text>
+            <text x="450" y="95" class="val" font-size="19">697 萬人</text>
+            <text x="450" y="452" class="lbl" font-size="16">2070 推估</text>
           </g>
         </svg>
-        <div class="figcap">十年內老年人口再增逾百萬。來源：國發會人口推估（2024）</div>
+        <div class="figcap">45 年內老年人口再增 248 萬人；扶老比從 <b>3.6 位青壯年撐 1 位長輩</b> 掉到 <b>1 : 1</b>。<br>來源：內政部戶政司（2025 年底實際 4,673,155 人 / 20.06%）、國發會《中華民國人口推估 2024–2070》中推估</div>
       </div>
       <div class="chart-wrap">
-        <div class="ct">符合條件人口漏斗 · 政府統計推估</div>
-        <svg viewBox="0 0 460 470" preserveAspectRatio="xMidYMid meet" role="img" aria-label="符合條件人口漏斗">
+        <div class="ct">政府自己算出來的服務對象漏斗 · 全是官方數字</div>
+        <svg viewBox="0 0 460 470" preserveAspectRatio="xMidYMid meet" role="img" aria-label="服務對象人口漏斗">
           <g text-anchor="middle" font-weight="800">
-            <polygon points="30,18 430,18 394,115 66,115" fill="#FFB14D"/><text x="230" y="60" font-size="17" fill="#7a4a10">65 歲以上</text><text x="230" y="88" font-size="23" fill="#7a4a10">430 萬</text>
-            <polygon points="66,123 394,123 358,220 102,220" fill="#F96C1A"/><text x="230" y="165" font-size="16" fill="#fff">＋ 獨居</text><text x="230" y="193" font-size="21" fill="#fff">~40 萬</text>
-            <polygon points="102,228 358,228 322,325 138,325" fill="#5f93c4"/><text x="230" y="270" font-size="15" fill="#fff">＋ 行動不便／稍不便</text><text x="230" y="298" font-size="20" fill="#fff">~22 萬</text>
-            <polygon points="138,333 322,333 286,430 174,430" fill="#1E88D6"/><text x="230" y="375" font-size="14" fill="#fff">＋ 會國語／台語＝核心</text><text x="230" y="403" font-size="20" fill="#fff">~20 萬</text>
+            <polygon points="30,18 430,18 394,115 66,115" fill="#FFB14D"/><text x="230" y="58" font-size="17" fill="#7a4a10">65 歲以上（全台 20.1%）</text><text x="230" y="88" font-size="23" fill="#7a4a10">467 萬人</text>
+            <polygon points="66,123 394,123 358,220 102,220" fill="#F96C1A"/><text x="230" y="163" font-size="16" fill="#fff">＋ 獨居或僅與 65+ 伴侶同住</text><text x="230" y="193" font-size="21" fill="#fff">約 70 萬人</text>
+            <polygon points="102,228 358,228 322,325 138,325" fill="#5f93c4"/><text x="230" y="268" font-size="15" fill="#fff">＋ 政府訪視後評估「需要支持」</text><text x="230" y="298" font-size="20" fill="#fff">約 35 萬人</text>
+            <polygon points="138,333 322,333 286,430 174,430" fill="#1E88D6"/><text x="230" y="373" font-size="14" fill="#fff">＋ 本期已編列補助的救援設備</text><text x="230" y="403" font-size="20" fill="#fff">7 萬台</text>
           </g>
         </svg>
-        <div class="figcap">核心 ~20 萬人需即時守護。來源：內政部 2023、衛福部《老人狀況調查》</div>
+        <div class="figcap">最底層的 <b>7 萬台</b> 不是我們猜的市場，是<b>政府這兩年已經編列預算要買的量</b>。<br>來源：衛福部獨居長者支持方案（62.5 億元特別預算，2026–2027 訪視 70 萬人）</div>
       </div>
     </div>
-    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="2" data-total="12"></span></div>
+    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="2" data-total="14"></span></div>
   </section>
 
-  <!-- 3. 三端困擾（全幅三分割實拍）＋ 四端關係圖 -->
+  <!-- 3. 問題 · 人力：志工供給 vs 專業人力缺口 -->
+  <section class="slide" data-title="人力">
+    <span class="section-num">02</span>
+    <p class="num-tag">問題 · 人力</p>
+    <h2 class="h2 mt-s">台灣不缺善意，<span class="gradient-text">缺的是把善意派到門口的系統</span>。</h2>
+    <div class="hrgrid">
+      <div class="hrcard good">
+        <div class="hh">✅ 供給 · 民間人力其實很足</div>
+        <div class="hs">問題不是沒人願意幫，是沒人知道「現在誰需要什麼」</div>
+        <div class="hrow"><div class="hi">🤝</div><div><div class="hn">110 萬人</div><p>全國志工人數，其中 <b>65 歲以上 34.4 萬人、占 31%</b>——長輩自己就是最大的志工族群。<span class="sc">依衛福部志願服務統計推算：2022 年 65 歲以上志工 344,019 人，占全體 31.13%</span></p></div></div>
+        <div class="hrow"><div class="hi">⛏️</div><div><div class="hn">50 萬人</div><p>2025 年馬太鞍溪溢流，光復鄉<b>一次動員逾 50 萬名「鏟子超人」</b>——任務夠清楚，台灣人就會到場。<span class="sc">環境部，2026 年 7 月</span></p></div></div>
+        <div class="hrow"><div class="hi">🏠</div><div><div class="hn">5,000 處</div><p>政府正推動社區關懷據點與基層組織做關懷訪視、送餐。<b>據點在、人也在，缺的是即時派單。</b><span class="sc">衛福部，2026 年 3 月</span></p></div></div>
+      </div>
+      <div class="hrcard bad">
+        <div class="hh">⚠️ 需求 · 專業人力補不上來</div>
+        <div class="hs">照服員成長停滯、社工瀕臨崩潰，靠「再加人」已經無解</div>
+        <div class="hrow"><div class="hi">🧑‍⚕️</div><div><div class="hn">1 : 67</div><p>居家服務員僅約 <b>7 萬人</b>，面對 467 萬長輩。照服員總數 9.7–10 萬人、<b>近三年停滯</b>，2024 年居服員只增加 700 人。<span class="sc">衛福部長照 2.0 統計</span></p></div></div>
+        <div class="hrow"><div class="hi">😵</div><div><div class="hn">近 80%</div><p>社工有<b>中度以上職業倦怠</b>、近半數重度；對制度支持的自評只有 <b>28.6 / 100 分</b>。<span class="sc">台北市社會工作人員職業工會 2026 年調查，n=724</span></p></div></div>
+        <div class="hrow"><div class="hi">📈</div><div><div class="hn">50 萬人</div><p>專家推估的未來照顧人力缺口。85 歲以上將從 47 萬（2025）增至 <b>139 萬（2045）</b>，這段年紀失能率約 5 成。<span class="sc">國發會中推估、衛福部</span></p></div></div>
+      </div>
+    </div>
+    <div class="ratiobar">
+      <div class="ct">同一批長輩，兩種人力比例</div>
+      <svg viewBox="0 0 900 46" role="img" aria-label="人力比例對照">
+        <rect x="0" y="6" width="440" height="34" rx="8" fill="#2E9E5B"/>
+        <text x="220" y="30" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">志工 110 萬 : 需關懷長輩 70 萬 ≈ 1.6 : 1（善意夠）</text>
+        <rect x="460" y="6" width="440" height="34" rx="8" fill="#E5484D"/>
+        <text x="680" y="30" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">居服員 7 萬 : 65 歲以上 467 萬 ≈ 1 : 67（專業人力不夠）</text>
+      </svg>
+      <div class="figcap">所以我們不再增加一種專業人力，而是<b>把志工接進派單系統</b>——用時間銀行讓這 110 萬人的善意可被調度、被記錄、被回饋。</div>
+    </div>
+    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="3" data-total="14"></span></div>
+  </section>
+
+  <!-- 4. 三端困擾（全幅三分割實拍）＋ 四端關係圖 -->
   <section class="slide threefull" data-title="三端困擾">
     <div class="tfhead">
       <b>照顧的每一端，<span class="g">都卡在自己的困擾裡</span></b>
       <div class="tfnote"><img src="img/four.png" alt="四端關係圖"><span><b>四端關係圖：</b>收音機把一個事件同步推到四端，並補進第四端——<b>社區志工</b>，把「感知」接到真正能到場的人力。</span></div>
     </div>
     <div class="tfgrid">
-      <div class="tfcell" style="background-image:url(img/p_elder.png)"><div class="scrim"><h4>👵 長輩</h4><ul><li>跌倒沒人知道</li><li>只會講台語、不識字</li><li>不會用手機、按不了 LINE</li></ul></div></div>
+      <div class="tfcell" style="background-image:url(img/p_elder.png)"><div class="scrim"><h4>👵 長輩</h4><ul><li>在家出事沒人知道——台北 5 年 178 起獨居死亡通報</li><li>只會講台語、不識字</li><li>不會用手機、按不了 LINE</li></ul></div></div>
       <div class="tfcell" style="background-image:url(img/p_child.png)"><div class="scrim"><h4>🧑‍💼 兒女</h4><ul><li>不在身邊放不下心</li><li>出事往往最後才知道</li></ul></div></div>
-      <div class="tfcell" style="background-image:url(img/p_worker.png)"><div class="scrim"><h4>🧑‍⚕️ 社工</h4><ul><li>案量爆炸、訪視跑不完</li><li>離職潮，人力接不上</li><li>紀錄申報壓垮、怕漏接</li></ul></div></div>
+      <div class="tfcell" style="background-image:url(img/p_worker.png)"><div class="scrim"><h4>🧑‍⚕️ 社工</h4><ul><li>案量爆炸、訪視跑不完</li><li>近 80% 中度以上職業倦怠、近半重度</li><li>紀錄申報壓垮、怕漏接</li></ul></div></div>
     </div>
-    <div class="ffnum">3 / 12</div>
+    <div class="ffnum">4 / 14</div>
   </section>
 
-  <!-- 4. 時間銀行 · 四端困擾 → 解決（全幅四分割）-->
+  <!-- 5. 時間銀行 · 四端困擾 → 解決（全幅四分割）-->
   <section class="slide fourfull" data-title="四端解決">
     <div class="fftitle"><b>一台收音機串起四端，<span class="g">困擾全接住</span></b></div>
     <div class="ffgrid">
       <div class="ffcell" style="background-image:url(img/p_elder.png)"><div class="scrim">
         <h4>👵 長輩</h4><ul>
-          <li>跌倒沒人知 <span class="ar">→</span> 鏡頭在裝置端偵測跌倒，<b>20 秒沒回應就自動求助</b>，也能一鍵按 SOS</li>
-          <li>不會用手機 <span class="ar">→</span> 免螢幕、免 App，<b>整個手掌按大鈕或直接開口</b>，國語台語都聽得懂</li></ul></div></div>
+          <li>出事沒人知 <span class="ar">→</span> <b>整個手掌就能按的 SOS 大鈕</b>，或直接開口說一句話；不必找手機、不必解鎖</li>
+          <li>不會用手機 <span class="ar">→</span> 免螢幕、免 App，<b>按住就說話、放開就送出</b>，國語台語都聽得懂</li>
+          <li>倒下了按不到鈕 <span class="ar">→</span> <b>鏡頭在晶片裡判斷跌倒</b>，先用語音問「你還好嗎？」，長輩說不用就不通報<span class="wip">開發中</span></li></ul></div></div>
       <div class="ffcell" style="background-image:url(img/p_child.png)"><div class="scrim">
         <h4>🧑‍💼 兒女</h4><ul>
-          <li>放不下心 <span class="ar">→</span> 疑似跌倒／SOS <b>手機立刻收到推播</b>，平常每天一則「安心日報」報平安</li>
+          <li>放不下心 <span class="ar">→</span> 長輩一按 SOS 或發出需求，<b>手機立刻收到推播</b>，不必再靠每天打電話確認</li>
           <li>怕漏接 <span class="ar">→</span> App 看得到<b>志工是否接單、預計幾分鐘到（ETA）與到場回報</b></li></ul></div></div>
       <div class="ffcell" style="background-image:url(img/p_worker.png)"><div class="scrim">
         <h4>🧑‍⚕️ 社工</h4><ul>
@@ -104,27 +151,12 @@
           <li>想幫忙沒管道 <span class="ar">→</span> App 收到<b>附近的關懷／物資需求單</b>，接單後導航到長輩家</li>
           <li>付出沒被記得 <span class="ar">→</span> 服務時數存進<b>「時間銀行」，日後可換回自己需要的照顧</b></li></ul></div></div>
     </div>
-    <div class="ffnum">4 / 12</div>
-  </section>
-
-  <!-- 5. 四端畫面 · Live Demo（全幅情境圖背景＋App）-->
-  <section class="slide appqfull" data-title="四端畫面">
-    <div class="tfhead">
-      <b>同一起事件，<span class="g">四端各自看到為他設計的畫面</span></b>
-      <div class="tfnote2"><b>主要族群</b>只用一台<b>收音機</b>、免看螢幕；<b>次要族群</b>用 <b>App</b> 掌握四端。網頁後台＋兩端 App <b>已部署上線</b>。</div>
-    </div>
-    <div class="appqg">
-      <div class="appqcell" style="background-image:url(img/p_elder.png)"><img src="img/app_elder.png" alt="長輩畫面"><div class="qcap">👵 長輩</div><div class="qsub">收音機・按住說話</div></div>
-      <a class="appqcell" href="https://d22h4jxlikk4jo.cloudfront.net/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;background-image:url(img/p_child.png)"><img src="img/app_family.png" alt="家屬 App"><div class="qcap">🧑‍💼 兒女</div><div class="qsub">家屬 App · ▶ 點我開啟</div></a>
-      <a class="appqcell" href="https://d3inbvxprhol1.cloudfront.net/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;background-image:url(img/p_volunteer.png)"><img src="img/app_volunteer.png" alt="志工 App"><div class="qcap">🤝 志工</div><div class="qsub">志工 App · ▶ 點我開啟</div></a>
-      <a class="appqcell" href="https://d2o5h7ul68enq.cloudfront.net/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;background-image:url(img/p_worker.png)"><img src="img/app_worker.png" alt="社工後台"><div class="qcap">🧑‍⚕️ 社工</div><div class="qsub">Web 後台・Excel · ▶ 點我開啟</div></a>
-    </div>
-    <div class="ffnum">5 / 12</div>
+    <div class="ffnum">5 / 14</div>
   </section>
 
   <!-- 6. 產品設計（每點 app 截圖）-->
   <section class="slide" data-title="產品設計">
-    <span class="section-num">05</span>
+    <span class="section-num">03</span>
     <p class="num-tag">產品設計 · 長輩端</p>
     <h2 class="h2 mt-s">為長輩重設計：<span class="gradient-text">大字、橘紅鍵、整掌就能按</span>。</h2>
     <div class="split tight">
@@ -132,19 +164,19 @@
       <div class="pdgrid">
         <div class="pdcell"><div class="pdfig"><img src="img/pd_btn.png" alt="橘紅按鈕"></div><h6>橘紅高辨識</h6><p>對長者辨識度最高，遠遠就看得到。</p></div>
         <div class="pdcell"><div class="pdfig"><img src="img/pd_big.png" alt="大字介面"></div><h6>WCAG · 大字簡潔</h6><p>高對比、超大字，不怕點錯。</p></div>
-        <div class="pdcell"><div class="pdfig"><img src="img/pd_lang.png" alt="國台語切換"></div><h6>台語／國語 ASR・TTS</h6><p>聽得懂也說得出，長輩不用學。</p></div>
+        <div class="pdcell"><div class="pdfig"><img src="img/pd_lang.png" alt="國台語切換"></div><h6>國台語 ASR・Breeze-ASR-26</h6><p>聯發科國產模型，長輩不用學。</p></div>
         <div class="pdcell"><div class="pdfig"><svg viewBox="0 0 200 62" role="img" aria-label="藍牙佈網"><defs><linearGradient id="pf4" x1="0" x2="1"><stop offset="0" stop-color="#F96C1A"/><stop offset="1" stop-color="#1E88D6"/></linearGradient></defs><rect width="200" height="62" fill="#E7F3FB"/><rect x="20" y="13" width="28" height="38" rx="6" fill="#fff" stroke="#1E88D6" stroke-width="1.5"/><rect x="25" y="18" width="18" height="24" rx="2" fill="#DCEBF8"/><g fill="none" stroke="url(#pf4)" stroke-width="3" stroke-linecap="round"><path d="M60,31 q10,-12 20,0"/><path d="M68,31 q6,-8 12,0"/></g><text x="90" y="52" font-size="9" font-weight="800" fill="#0E6EA8" text-anchor="middle">BLE</text><rect x="120" y="11" width="60" height="42" rx="10" fill="#efe7d7" stroke="#d8ccb4" stroke-width="1.5"/><rect x="128" y="18" width="44" height="6" rx="3" fill="#1E88D6"/><circle cx="168" cy="41" r="7" fill="#cd2018"/></svg></div><h6>簡單連 Wi-Fi</h6><p>家屬 App 藍牙一鍵佈建；無網路可選 4G。</p></div>
         <div class="pdcell"><div class="pdfig"><svg viewBox="0 0 200 62" role="img" aria-label="SOS 整掌按"><rect width="200" height="62" fill="#FDECEA"/><ellipse cx="88" cy="13" rx="20" ry="7" fill="#000" opacity=".08"/><circle cx="88" cy="33" r="21" fill="#CD2018"/><text x="88" y="39" font-size="15" font-weight="900" fill="#fff" text-anchor="middle">SOS</text><text x="150" y="37" font-size="12" font-weight="800" fill="#CD2018">整掌按</text></svg></div><h6>緊急零打字</h6><p>整掌按大鈕或直接語音，手抖也免精細操作。</p></div>
       </div>
     </div>
-    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="6" data-total="12"></span></div>
+    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="6" data-total="14"></span></div>
   </section>
 
   <!-- 7. 使用者端硬體說明 · 加分項（含隱私）-->
   <section class="slide" data-title="硬體說明">
-    <span class="section-num">06</span>
+    <span class="section-num">04</span>
     <p class="num-tag">使用者端硬體說明 · 加分項</p>
-    <h2 class="h2 mt-s">運算留在家裡，<span class="gradient-text">影像不外傳</span>、隱私守在裝置端。</h2>
+    <h2 class="h2 mt-s">有鏡頭，但<span class="gradient-text">影像永遠留在晶片裡</span>。</h2>
     <div class="split">
       <div class="visual" style="display:flex;gap:14px;box-shadow:none">
         <img src="img/dev_real.jpg" alt="實體原型" style="width:50%">
@@ -154,87 +186,119 @@
         <div class="srow"><div class="si">🖨️</div><div><h5>外殼・3D 列印</h5><p>咖啡色圓角機身，快速打樣、依長輩手感微調；<b>像收音機、不像醫療器材</b>。</p></div></div>
         <div class="srow"><div class="si">🎗️</div><div><h5>掛繩・隨身攜帶</h5><p>機身頂部掛繩孔，掛脖子或掛牆邊，<b>走到哪帶到哪</b>，求助不受限在固定位置。</p></div></div>
         <div class="srow"><div class="si">🔘</div><div><h5>講話鍵・超簡單操作</h5><p>頂部一顆大鍵，<b>按住就說話、放開就送出</b>；免螢幕、免 App、零學習。</p></div></div>
-        <div class="srow"><div class="si">🎙️</div><div><h5>收音＋喇叭・國台語 ASR／TTS</h5><p>麥克風收音、喇叭播報，國語台語都通；<b>語音轉成文字後音檔即刪、絕不儲存</b>。</p></div></div>
-        <div class="srow"><div class="si">🧠</div><div><h5>晟邦 AI 晶片・RTL8735B</h5><p>相機＋NPU＋Wi-Fi/BLE 八合一；<b>跌倒視覺推論在晶片本地完成、原始影像永不出門</b>。</p></div></div>
+        <div class="srow"><div class="si">🎙️</div><div><h5>收音＋喇叭・ASR 全用國產模型<span class="done-tag">已完成</span></h5><p>國語、台語一律走<b>聯發科 Breeze-ASR-26</b>；喇叭播報國台語都通，<b>語音轉成文字後音檔即刪</b>。</p></div></div>
+        <div class="srow"><div class="si">🧠</div><div><h5>晟邦 AI 晶片・RTL8735B</h5><p>相機＋NPU＋Wi-Fi/BLE 八合一，<b>視覺推論在晶片本地跑完，原始影像永不離開裝置</b>——不錄影、不上傳、雲端看不到長輩家裡。</p></div></div>
+        <div class="srow"><div class="si">👁️</div><div><h5>跌倒偵測・全程在裝置端<span class="wip">開發中</span></h5><p>偵測到疑似跌倒，裝置<b>先用語音問長輩「需不需要幫忙」</b>；確認需要才把<b>事件</b>送上雲派給志工／社工——<b>送出去的是一則事件，不是影像</b>。</p></div></div>
       </div>
     </div>
-    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="7" data-total="12"></span></div>
+    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="7" data-total="14"></span></div>
   </section>
 
-  <!-- 8. 生成式 AI 技術應用 -->
+  <!-- 8. 晟邦晶片 · 長輩端的邊緣大腦（全國產晶片賣點）-->
+  <section class="slide" data-title="國產晶片">
+    <span class="section-num">05</span>
+    <p class="num-tag">國產晶片 · 邊緣大腦</p>
+    <h2 class="h2 mt-s">一顆晟邦 HUB8735 Ultra，<span class="gradient-text">包辦長輩端幾乎所有的活</span>。</h2>
+    <div class="chipflow">
+      <span class="cf">感知（視覺跌倒＋收音）</span><span class="cfa">→</span>
+      <span class="cf">上報事件</span><span class="cfa">→</span>
+      <span class="cf">收下行指令</span><span class="cfa">→</span>
+      <span class="cf">發聲</span>
+      <span class="cfnote">AmebaPro2 平台 · <b>國產晶片</b><br>不是架構圖上的一個插槽，是整個長輩端</span>
+    </div>
+    <div class="chipgrid">
+      <div class="chipcell"><h5>🧩 主控 MCU</h5><p>跑整個韌體主迴圈與狀態邏輯，並負責 <b>SD 卡錄音暫存</b>，斷網時不掉資料。</p></div>
+      <div class="chipcell vis"><h5>👁️ 視覺 NPU · 跌倒偵測<span class="wip">開發中</span></h5><p>本地跑 <b>YOLO person</b>，人形框 <b>w/h &gt; 1.3 且持續 3 秒</b> 判為疑似跌倒。<b>影像永不外傳</b>——隱私邊界靠這顆在本地算才守得住。</p></div>
+      <div class="chipcell"><h5>📶 Wi-Fi ＋ BLE 5.1</h5><p>BLE 讓家屬 App 一鍵藍牙配網（<code>BLEWifiConfig</code>）；Wi-Fi 上行打 <code>POST /voice</code>，並常駐 <b>MQTT/TLS</b> 訂閱下行 <code>jinsun/{serial}/cmd</code>。</p></div>
+      <div class="chipcell"><h5>🎤 板載 PDM 麥克風</h5><p>只錄<b>長輩按鈕主動觸發</b>的那一段，<b>16 kHz mono</b> 上雲做 ASR；沒按就不錄、不上傳。</p></div>
+      <div class="chipcell"><h5>🔊 I2S 音訊輸出</h5><p>驅動 <b>MAX98357</b> 功放，把雲端 TTS 的 WAV 串流播出來——安撫語、進度播報、台語旗標。</p></div>
+      <div class="chipcell"><h5>🔘 觸發／SOS 輸入</h5><p>實體大鈕走 <code>D9</code>。<b>按下才錄音、按下才上雲</b>，這是整套「主動觸發」隱私設計的最後一道實體開關。</p></div>
+    </div>
+    <div class="demo-note">🇹🇼 <b>全國產組合</b>：邊緣用<b>晟邦 HUB8735 Ultra</b> 做感知與本地推論，語音理解用<b>聯發科 Breeze-ASR-26</b> 國產模型——從晶片到模型都留在台灣。</div>
+    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="8" data-total="14"></span></div>
+  </section>
+
+  <!-- 9. 生成式 AI 技術應用 -->
   <section class="slide" data-title="生成式AI">
-    <span class="section-num">07</span>
+    <span class="section-num">06</span>
     <p class="num-tag">生成式 AI 技術應用</p>
     <h2 class="h2 mt-s">多 Agent＋記憶＋護欄，<span class="gradient-text">把一句話變成正確一單</span>。</h2>
     <div class="grid g2 mt-l">
       <div class="card" style="padding:26px"><h4>🧠 多 Agent 編排（Bedrock）</h4><p class="dim">六個 Agent：Intent／Emergency／Needs／Conversation／Device／Memory，結構化工具呼叫，而非單次 prompt。</p></div>
       <div class="card" style="padding:26px"><h4>💾 個人記憶 · RAG</h4><p class="dim">Bedrock Titan Embeddings ＋ Knowledge Bases——「牛奶跟雞蛋」對到他常去的店、病史與家人。</p></div>
-      <div class="card" style="padding:26px"><h4>🎙️ ASR／TTS</h4><p class="dim">Transcribe 台語／國語辨識、Polly 語音播報；SOS／關鍵字在裝置端不必上雲。</p></div>
-      <div class="card" style="padding:26px"><h4>🛡️ 護欄</h4><p class="dim">低信心就<b>語音再確認</b>（「你是說要買牛奶嗎？」），寧可問一句、不亂派一單。</p></div>
+      <div class="card" style="padding:26px"><h4>🎙️ ASR · 全用國產模型<span class="done-tag">已完成</span></h4><p class="dim"><b>國語、台語一律走聯發科 Breeze-ASR-26</b>（聯發創新基地），跑在 SageMaker 上——不是把台語當華語硬解；播報用 Polly。</p></div>
+      <div class="card" style="padding:26px"><h4>🛡️ 護欄</h4><p class="dim">低信心就<b>語音再確認</b>（「你是說要買牛奶嗎？」），寧可問一句、不亂派一單。跌倒偵測也一樣——<b>先問長輩要不要幫忙</b>，不自作主張報警。</p></div>
     </div>
-    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="8" data-total="12"></span></div>
+    <div class="demo-note" style="display:flex;gap:34px;flex-wrap:wrap">
+      <div><span class="done-tag" style="margin-left:0">已完成</span> 國台語 ASR（聯發科 Breeze-ASR-26）、四端 App 與社工 Web 後台<b>已部署上線</b></div>
+      <div><span class="wip" style="margin-left:0">開發中</span> 裝置端視覺跌倒偵測（影像不上雲，偵測後語音確認再通報）</div>
+    </div>
+    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="9" data-total="14"></span></div>
   </section>
 
-  <!-- 9. AWS 雲端技術架構（＋資料應用）-->
+  <!-- 10. AWS 雲端技術架構（＋資料應用）-->
   <section class="slide" data-title="架構">
-    <span class="section-num">08</span>
+    <span class="section-num">07</span>
     <p class="num-tag">AWS 雲端技術架構</p>
-    <h2 class="h2 mt-s">跌倒推論留在邊緣，<span class="gradient-text">事件才上 AWS 雲端</span>。</h2>
+    <h2 class="h2 mt-s">影像不出裝置，<span class="gradient-text">長輩開口或按鈕才上雲</span>。</h2>
     <div class="arch" style="margin-top:20px">
-      <div class="arch-row"><div class="rt">邊緣・家中 <small>預設不上雲・影像不外傳</small></div>
-        <div class="svc-row"><span class="svc">晟邦 HUB8735 Ultra · 相機+NPU 跌倒推論</span><span class="svc">板載麥克風 · Wi-Fi/BLE/TTS</span></div></div>
-      <div class="arch-conn">↕ MQTT / TLS · 只傳事件</div>
+      <div class="arch-row"><div class="rt">邊緣・家中 <small>相機影像只在晶片內推論・不儲存、不外傳</small></div>
+        <div class="svc-row"><span class="svc">晟邦 HUB8735 Ultra · 相機＋NPU 本地推論</span><span class="svc">跌倒偵測<span class="wip">開發中</span></span><span class="svc">SOS 大鈕 · 燈號回饋</span><span class="svc">麥克風／喇叭 · Wi-Fi/BLE</span></div></div>
+      <div class="arch-conn">↕ MQTT / TLS · 只有<b>長輩主動按 SOS／開口說話</b>，或跌倒後確認要幫忙，才上傳事件與語音——<b>影像永不上傳</b></div>
       <div class="arch-row mid"><div class="rt">雲端・AWS <small>生成式 AI＋事件狀態機</small></div>
-        <div class="svc-row"><span class="svc aws">IoT Core</span><span class="svc aws">Step Functions</span><span class="svc aws">Lambda</span><span class="svc aws">Bedrock</span><span class="svc aws">SageMaker</span><span class="svc aws">Transcribe</span><span class="svc aws">Polly</span><span class="svc aws">DynamoDB</span><span class="svc aws">Cognito</span><span class="svc aws">AppSync</span></div></div>
+        <div class="svc-row"><span class="svc aws">IoT Core</span><span class="svc aws">Step Functions</span><span class="svc aws">Lambda</span><span class="svc aws">Bedrock</span><span class="svc aws">SageMaker · Breeze-ASR-26</span><span class="svc aws">Polly</span><span class="svc aws">DynamoDB</span><span class="svc aws">Cognito</span><span class="svc aws">AppSync</span></div></div>
       <div class="arch-conn">↕ AppSync / WebSocket · 四端即時同步</div>
       <div class="arch-row"><div class="rt">四端・使用者</div>
         <div class="svc-row"><span class="svc">長輩 · 語音/燈號</span><span class="svc">家屬 App</span><span class="svc">志工 App</span><span class="svc">社工 Web · Excel</span></div></div>
     </div>
     <div class="demo-note" style="display:grid;grid-template-columns:1fr 1fr;gap:9px 26px">
       <div>🧠 <b>Bedrock</b>：生成式 AI 大腦——多 Agent 意圖分類、對話、RAG 個人記憶與低信心再確認護欄。</div>
-      <div>🏗️ <b>SageMaker</b>：訓練／微調跌倒偵測與台語 ASR 模型，量化後部署到邊緣 NPU（推論仍留裝置本地）。</div>
+      <div>🏗️ <b>SageMaker</b>：承載<b>聯發科 Breeze-ASR-26</b> 推論端點（國語台語共用一顆國產模型）；跌倒偵測模型也在此訓練，量化後部署到邊緣 NPU。</div>
       <div>🗄️ <b>DynamoDB＋Cognito</b>：事件／服務紀錄／時間銀行帳本＋三端角色權限；社工<b>一鍵匯出 Excel</b> 申報。</div>
       <div>🛠️ <b>Kiro 輔助開發</b>：spec-driven 代理式 IDE，產出三端 App、雲端狀態機與韌體，加速迭代。</div>
     </div>
-    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="9" data-total="12"></span></div>
+    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="10" data-total="14"></span></div>
   </section>
 
-  <!-- 10. 商業模型 · 客群（漏斗拆解，不寫價錢）-->
+  <!-- 11. 商業模型 · 客群（漏斗拆解，不寫價錢）-->
   <section class="slide" data-title="客群">
-    <span class="section-num">09</span>
+    <span class="section-num">08</span>
     <p class="num-tag">商業模型 · 客群</p>
-    <h2 class="h2 mt-s">不會用、會用手機的長輩，<span class="gradient-text">都能被接住</span>。</h2>
+    <h2 class="h2 mt-s">先接政府已編列的 <span class="gradient-text">7 萬台</span>，再往 70 萬人擴張。</h2>
     <div class="split" style="margin-top:14px">
       <div class="segcard">
         <div class="simg" style="background-image:url(img/radio.png);background-size:cover"></div>
-        <div class="sbody"><div class="stag">主要客群 · 剛需</div><h4 style="font-size:21px;margin:3px 0 5px">不識字／手抖・帕金森／不會用手機</h4><p>約 <b>11 萬人</b>；手無法精細操作——<b>整個手掌就能按</b>大鈕，打開、按下、說話。</p></div>
+        <div class="sbody"><div class="stag">主要客群 · 剛需（第一批 7 萬台）</div><h4 style="font-size:21px;margin:3px 0 5px">不識字／手抖・帕金森／不會用手機</h4><p>政府本期補助的<b>緊急救援設備 7 萬台</b>就是這群人。手無法精細操作——<b>整個手掌就能按</b>大鈕，打開、按下、說話。</p></div>
       </div>
       <div class="segcard">
         <div class="simg" style="background-image:url(img/app_family.png)"></div>
-        <div class="sbody"><div class="stag">次要客群 · 擴張</div><h4 style="font-size:21px;margin:3px 0 5px">會用基礎手機</h4><p>約 <b>9 萬人</b>；家屬／志工用 <b>App</b> 掌握四端。</p></div>
+        <div class="sbody"><div class="stag">次要客群 · 擴張</div><h4 style="font-size:21px;margin:3px 0 5px">會用基礎手機</h4><p>家屬／志工用 <b>App</b> 掌握四端；長輩端仍可只用收音機，家人在遠端補足數位介面。</p></div>
       </div>
     </div>
     <div class="chart-wrap" style="margin-top:14px;padding:14px 20px">
-      <div class="ct">核心 20 萬人怎麼拆（漏斗末端）</div>
-      <svg viewBox="0 0 900 54" role="img" aria-label="核心客群拆解" preserveAspectRatio="none" style="width:100%;height:44px">
+      <div class="ct">三階段市場（每一階都是政府已公布的數字）</div>
+      <svg viewBox="0 0 900 54" role="img" aria-label="三階段市場擴張">
         <rect x="0" y="10" width="900" height="34" rx="8" fill="#eee"/>
-        <rect x="0" y="10" width="495" height="34" rx="8" fill="#F96C1A"/>
-        <rect x="495" y="10" width="405" height="34" fill="#1E88D6"/>
-        <text x="247" y="33" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">主要 ~11 萬（不會用手機）</text>
-        <text x="697" y="33" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">次要 ~9 萬（會用手機）</text>
+        <rect x="0" y="10" width="200" height="34" rx="8" fill="#F96C1A"/>
+        <rect x="200" y="10" width="330" height="34" fill="#9a6fa0"/>
+        <rect x="530" y="10" width="370" height="34" fill="#1E88D6"/>
+        <text x="100" y="33" text-anchor="middle" font-size="15" font-weight="800" fill="#fff">7 萬台・已編列</text>
+        <text x="365" y="33" text-anchor="middle" font-size="15" font-weight="800" fill="#fff">35 萬人・評估需支持</text>
+        <text x="715" y="33" text-anchor="middle" font-size="15" font-weight="800" fill="#fff">70 萬人・獨居／雙老</text>
       </svg>
+      <div class="figcap">來源：衛福部獨居長者支持方案（62.5 億元特別預算，2026–2027）</div>
     </div>
-    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="10" data-total="12"></span></div>
+    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="11" data-total="14"></span></div>
   </section>
 
-  <!-- 11. 成本預算 · 全配套 -->
+  <!-- 12. 成本預算 · 全配套 -->
   <section class="slide" data-title="成本預算">
-    <span class="section-num">10</span>
+    <span class="section-num">09</span>
     <p class="num-tag">成本預算 · 全配套</p>
     <h2 class="h2 mt-s">量產後單套約 <span class="gradient-text">NT$1,400</span>，不靠硬體賺錢。</h2>
     <div class="split">
       <div class="chart-wrap">
-        <div class="ct">單套配套成本 · 含硬體＋人力＋維護（量產估算）</div>
+        <div class="ct">單套配套成本 · 含硬體＋人力＋維護（NT$／台）</div>
         <table class="bom">
           <tr><td>硬體（量產 BOM：晟邦模組＋機構＋電池）</td><td class="v">700</td></tr>
           <tr><td>佈建／安裝人力（一次）</td><td class="v">200</td></tr>
@@ -242,10 +306,11 @@
           <tr><td>維護・客服（首年／台）</td><td class="v">250</td></tr>
           <tr class="sum"><td>單套配套合計</td><td class="v">≈ 1,400</td></tr>
         </table>
+        <div class="figcap">本頁金額為<b>內部量產估算</b>，非官方統計、未經第三方查核；實際成本依採購量與規格而異。</div>
       </div>
       <div>
         <div class="chart-wrap">
-          <div class="ct">晟邦模組成本隨量下降（NT$／顆）</div>
+          <div class="ct">晟邦模組成本隨量下降（NT$／顆）· 內部量產估算</div>
           <svg viewBox="0 0 420 180" role="img" aria-label="模組量產成本曲線">
             <defs><linearGradient id="gV" x1="0" x2="1"><stop offset="0" stop-color="#F96C1A"/><stop offset="1" stop-color="#1E88D6"/></linearGradient></defs>
             <line x1="50" y1="150" x2="400" y2="150" class="axis"/>
@@ -257,24 +322,41 @@
             </g>
           </svg>
         </div>
-        <p class="lede mt-m" style="font-size:15px">依規模單套 <b>1,000–2,000</b>；硬體靠量產壓低、人力與維護隨規模攤薄。硬體由<b>政府長照標案採購</b>、差額補助，公司<b>不靠硬體賺錢</b>，獲利走服務訂閱＋標案。</p>
+        <p class="lede" style="font-size:15px;margin-top:12px">依規模單套 <b>1,000–2,000</b>；硬體靠量產壓低、人力與維護隨規模攤薄。硬體由<b>政府長照標案採購</b>、差額補助，公司<b>不靠硬體賺錢</b>，獲利走服務訂閱＋標案。</p>
+        <p class="lede" style="font-size:15px;margin-top:8px">對照政府預算：<b>7 萬台 × NT$1,400 ≈ 9.8 億元</b>，在衛福部 <b>62.5 億元</b> 獨居長者特別預算之內，<b>不需要新的財源</b>。</p>
       </div>
     </div>
-    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="11" data-total="12"></span></div>
+    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="12" data-total="14"></span></div>
   </section>
 
-  <!-- 12. 願景 -->
+  <!-- 13. 願景 -->
   <section class="slide" data-title="願景">
     <p class="num-tag">願景</p>
     <div class="ask-box mt-m">
       <h2 class="h2">四端接成一張網：<br>長輩安心、兒女放心、社工減壓、志工有為。</h2>
       <p class="lede" style="max-width:64ch">十年內，把「一個人在家」變成「附近有人能接手」。感知 → 決策 → 行動 → 回報，一條會呼吸的社區互助閉環。</p>
+      <p class="lede" style="max-width:64ch;margin-top:10px">目標很具體：把獨居長輩的求助覆蓋率，從台北市今天的 <b>7%</b> 拉到 <b>全台 70 萬人</b>；讓 <b>110 萬名志工</b> 的每一小時，都存進自己的時間銀行。</p>
       <div class="row mt-l" style="gap:56px">
         <div><div style="font-size:32px;font-weight:900">金孫收音機</div><div class="dim">近端 AI 陪伴與社區互助派遣</div></div>
         <div><div style="font-size:32px;font-weight:900">2026</div><div class="dim">AI 創新獎 · 智慧照護</div></div>
       </div>
     </div>
-    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="12" data-total="12"></span></div>
+    <div class="deck-footer"><span>金孫收音機 · 台灣十年提案</span><span class="slide-number" data-current="13" data-total="14"></span></div>
+  </section>
+
+  <!-- 14. 四端畫面 · Live Demo（全幅情境圖背景＋App）— 概念講完才進 Demo -->
+  <section class="slide appqfull" data-title="四端畫面">
+    <div class="tfhead">
+      <b>同一起事件，<span class="g">四端各自看到為他設計的畫面</span></b>
+      <div class="tfnote2"><b>主要族群</b>只用一台<b>收音機</b>、免看螢幕；<b>次要族群</b>用 <b>App</b> 掌握四端。網頁後台＋兩端 App <b>已部署上線</b>，現在就能點開。</div>
+    </div>
+    <div class="appqg">
+      <div class="appqcell" style="background-image:url(img/p_elder.png)"><img src="img/app_elder.png" alt="長輩畫面"><div class="qcap">👵 長輩</div><div class="qsub">收音機・按住說話</div></div>
+      <a class="appqcell" href="https://d22h4jxlikk4jo.cloudfront.net/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;background-image:url(img/p_child.png)"><img src="img/app_family.png" alt="家屬 App"><div class="qcap">🧑‍💼 兒女</div><div class="qsub">家屬 App · ▶ 點我開啟</div></a>
+      <a class="appqcell" href="https://d3inbvxprhol1.cloudfront.net/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;background-image:url(img/p_volunteer.png)"><img src="img/app_volunteer.png" alt="志工 App"><div class="qcap">🤝 志工</div><div class="qsub">志工 App · ▶ 點我開啟</div></a>
+      <a class="appqcell" href="https://d2o5h7ul68enq.cloudfront.net/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;background-image:url(img/p_worker.png)"><img src="img/app_worker.png" alt="社工後台"><div class="qcap">🧑‍⚕️ 社工</div><div class="qsub">Web 後台・Excel · ▶ 點我開啟</div></a>
+    </div>
+    <div class="ffnum">14 / 14</div>
   </section>
 
 </div>

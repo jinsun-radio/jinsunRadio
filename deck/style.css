@@ -262,3 +262,59 @@
 .tpl-pitch-deck .appqg .appqcell img{width:88%;margin-bottom:6px}
 .tpl-pitch-deck .appqg .appqcell .qcap{font-size:17px}
 .tpl-pitch-deck .appqg .appqcell .qsub{font-size:12.5px}
+
+/* ---- v16: 封面硬數據條、人力供需頁 ---- */
+.tpl-pitch-deck .statstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:22px}
+.tpl-pitch-deck .statstrip > div{background:rgba(255,255,255,.78);border:1px solid var(--border);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+.tpl-pitch-deck .statstrip b{display:block;font-size:34px;font-weight:900;line-height:1.05;letter-spacing:-.02em;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tpl-pitch-deck .statstrip span{display:block;margin-top:5px;font-size:13px;color:var(--text-2);line-height:1.4}
+.tpl-pitch-deck .statstrip span b{display:inline;font-size:13px;background:none;color:var(--accent-3);-webkit-text-fill-color:var(--accent-3)}
+
+/* 人力供需頁 */
+.tpl-pitch-deck .hrgrid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px}
+.tpl-pitch-deck .hrcard{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:16px 20px 14px;box-shadow:var(--shadow)}
+.tpl-pitch-deck .hrcard.good{border-top:4px solid #2E9E5B}
+.tpl-pitch-deck .hrcard.bad{border-top:4px solid #E5484D}
+.tpl-pitch-deck .hrcard .hh{font-size:19px;font-weight:900;margin-bottom:4px}
+.tpl-pitch-deck .hrcard .hs{font-size:13.5px;color:var(--text-3);margin-bottom:10px}
+.tpl-pitch-deck .hrow{display:flex;gap:13px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--border)}
+.tpl-pitch-deck .hrow .hi{font-size:22px;line-height:1.1;flex:0 0 26px}
+.tpl-pitch-deck .hrow .hn{font-size:22px;font-weight:900;letter-spacing:-.02em;line-height:1.15;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tpl-pitch-deck .hrow p{font-size:14px;color:var(--text-2);line-height:1.45;margin-top:2px}
+.tpl-pitch-deck .hrow p b{color:var(--accent);font-weight:800}
+.tpl-pitch-deck .hrow .sc{display:block;font-size:11.5px;color:var(--text-3);margin-top:3px}
+.tpl-pitch-deck .ratiobar{margin-top:14px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 20px 12px;box-shadow:var(--shadow)}
+.tpl-pitch-deck .ratiobar svg{width:100%;height:auto;display:block}
+/* 圖表用的 SVG 輔助類別（原本未定義，導致座標軸看不見） */
+.tpl-pitch-deck .chart-wrap svg .axis{stroke:var(--border-strong);stroke-width:2}
+.tpl-pitch-deck .chart-wrap svg .val{fill:var(--text-1);font-weight:800}
+.tpl-pitch-deck .chart-wrap svg .lbl{fill:var(--text-2);font-weight:700;font-size:14px}
+
+/* ---- v17: 開發中／已完成 狀態徽章 ---- */
+.tpl-pitch-deck .wip,.tpl-pitch-deck .done-tag{display:inline-block;font-size:11.5px;font-weight:800;border-radius:999px;
+  padding:2px 9px;margin-left:6px;vertical-align:2px;white-space:nowrap}
+.tpl-pitch-deck .wip{background:#FFF0DC;color:#9a4a08;border:1px solid #F5C089}
+.tpl-pitch-deck .done-tag{background:#E4F5EA;color:#1c6b3d;border:1px solid #9AD5B0}
+/* 深色（全幅情境圖）上的徽章要反過來 */
+.tpl-pitch-deck .ffcell .wip,.tpl-pitch-deck .tfcell .wip{background:rgba(255,177,77,.22);color:#FFD9A8;border-color:rgba(255,177,77,.6)}
+.tpl-pitch-deck .ffcell .done-tag,.tpl-pitch-deck .tfcell .done-tag{background:rgba(46,158,91,.22);color:#B8ECC9;border-color:rgba(46,158,91,.6)}
+.tpl-pitch-deck .arch-conn b{color:var(--accent-3);font-weight:900}
+.tpl-pitch-deck .svc .wip{margin-left:5px;font-size:10.5px;padding:1px 7px}
+.tpl-pitch-deck .srow h5 .wip,.tpl-pitch-deck .srow h5 .done-tag{vertical-align:1px}
+
+/* ---- v18: 晟邦晶片 · 邊緣大腦頁 ---- */
+.tpl-pitch-deck .chipflow{display:flex;align-items:center;gap:10px;margin-top:18px;background:linear-gradient(135deg,#FFF3E9,#EAF4FC);
+  border:1px solid color-mix(in srgb,var(--accent-3) 22%,transparent);border-radius:16px;padding:14px 22px}
+.tpl-pitch-deck .chipflow .cf{font-size:18px;font-weight:800;color:var(--text-1)}
+.tpl-pitch-deck .chipflow .cfa{font-size:20px;font-weight:900;color:var(--accent-3)}
+.tpl-pitch-deck .chipflow .cfnote{margin-left:auto;font-size:14px;color:var(--text-2);text-align:right;line-height:1.4}
+.tpl-pitch-deck .chipgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+.tpl-pitch-deck .chipcell{border:1px solid var(--border);border-radius:16px;padding:14px 18px 13px;background:var(--surface);box-shadow:var(--shadow)}
+.tpl-pitch-deck .chipcell.vis{border:1px solid color-mix(in srgb,var(--accent-3) 45%,transparent);background:linear-gradient(135deg,#FFF6EE,#F7FBFE)}
+.tpl-pitch-deck .chipcell h5{font-size:18px;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tpl-pitch-deck .chipcell p{font-size:14px;color:var(--text-2);line-height:1.5}
+.tpl-pitch-deck .chipcell p b{color:var(--accent);font-weight:800}
+.tpl-pitch-deck .chipcell code{font-family:'SF Mono',ui-monospace,monospace;font-size:12.5px;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:5px;padding:1px 5px;color:var(--text-1)}
