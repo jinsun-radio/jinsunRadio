@@ -53,7 +53,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["長輩觸發（按住按鈕 2 秒）"] --> B["裝置錄音（最長 30s，再按一下結束）"]
+    A["長輩觸發（按住按鈕 1 秒）"] --> B["裝置錄音（最長 30s，再按一下結束）"]
     B --> C["音檔上傳雲端 ASR → 中文文字"]
     C --> D["POST /voice<br/>{device_serial, text}"]
     D --> E{"rule 快路徑命中？<br/>（triggers.js：急救詞／需求詞／裝置詞）"}
@@ -99,7 +99,7 @@ sequenceDiagram
     participant MEM as memory_agent
     participant TTS as 雲端 TTS
 
-    E->>D: 按住按鈕 2 秒，說「今天好無聊喔」
+    E->>D: 按住按鈕 1 秒，說「今天好無聊喔」
     D->>ASR: 上傳錄音音檔
     ASR-->>D: 文字
     D->>EP: POST /voice {device_serial, text}
@@ -212,7 +212,7 @@ sequenceDiagram
 
 | 本文概念 | 原型現況（repo 內） | 正式目標 |
 |---|---|---|
-| 板子觸發語音 | 按住按鈕 2 秒錄音（`firmware/HUB-8735-Ultra-ASR-TTS.ino`） | ＋喚醒詞「小金孫」／SOS 鍵／相機事件 |
+| 板子觸發語音 | 按住按鈕 1 秒錄音（`firmware/HUB-8735-Ultra-ASR-TTS.ino`） | ＋喚醒詞「小金孫」／SOS 鍵／相機事件 |
 | ASR 語音轉文字 | 雲端 Breeze-ASR-26（已跑通） | 同，服務可抽換 |
 | server endpoint | `cloud/prototype` `POST /voice`（已建；**韌體已接上**，原本的直連 Gemini 已移除） | API Gateway + Lambda |
 | intent_agent | `agents/intent` ＋ rule 快路徑 `triggers.js` | Bedrock（Claude） |

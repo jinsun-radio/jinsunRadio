@@ -12,7 +12,7 @@
 
 **上行（長輩主動觸發才錄音上雲）**
 
-1. 長輩**按住按鈕 2 秒**（或**喊出聲**，見下方「本地聲音事件偵測」）→ 播 `init.wav` 提示音 → 開始錄音（板載 PDM 麥克風，16kHz mono，AAC/MP4 暫存 SD 卡；按鈕觸發最長 30 秒、**再按一下**或序列輸入 `stop` 提前結束，聲音喚醒則固定錄 8 秒後自動收工）
+1. 長輩**按住按鈕 1 秒**（或**喊出聲**，見下方「本地聲音事件偵測」）→ 播 `init.wav` 提示音 → 開始錄音（板載 PDM 麥克風，16kHz mono，AAC/MP4 暫存 SD 卡；按鈕觸發最長 30 秒、**再按一下**或序列輸入 `stop` 提前結束，聲音喚醒則固定錄 8 秒後自動收工）
 2. 錄音結束 → 播 `wait.wav` 墊住處理時間 → 音檔上傳**雲端 ASR**（faster-whisper Breeze-ASR-26，OpenAI 相容 `/v1/audio/transcriptions`）→ 取得中文文字
 3. 文字送**雲端語音 Agent server**（`POST /voice`，帶 `device_serial`）→ 雲端做意圖分類、起 20 秒升級計時、必要時開派遣單，同步回一句要立刻播的 `reply`＋選用的 `action.command`
 4. 回覆文字送**雲端 TTS**（回傳 WAV URL）→ 裝置以 HTTPS 串流邊下載邊播放（MAX98357 I2S 功放）

@@ -23,7 +23,7 @@ RTL8735B 內建 WiFi + BLE 5.1，Ameba SDK 有 `BLEWifiConfig` 範例。實測�
   再把**文字**送 `POST /voice`。`/voice` 契約不變、仍只收文字；語音 Agent server 不收音檔。
   隱私邊界＝`CLAUDE.md` 約束 1：**只有主動觸發那段語音上雲**，日常聲音與影像不上傳。
   （device-side STT 改列未來隱私強化方向。）
-- **觸發方式**：**按住按鈕 2 秒**開始錄音、再按一下結束；另有**聲音事件喚醒（✅ 已實作）**——裝置本地 NPU
+- **觸發方式**：**按住按鈕 1 秒**開始錄音、再按一下結束；另有**聲音事件喚醒（✅ 已實作）**——裝置本地 NPU
   音訊分類（YAMNet，`NNAudioClassification` + `DEFAULT_YAMNET`）偵測到呼救/哭聲/尖叫（distress 類）
   即觸發同一條喚醒錄音流程（錄 8 秒後自動收工，因為沒有人會來按第二下）。撞擊類聲音**絕不單獨觸發**，
   只把 `lastImpactAt` 記下來開一扇 3 秒佐證窗；窗內若再聽到 distress 才判定高信心跌倒、

@@ -222,7 +222,7 @@ char* mqtt_root_ca = isrg_root_x1;
 // D12 被 I2S 的 LRC 佔用、D13 是閃光燈 PWM(恆為 LOW),按鈕用 D9。
 // 按鈕接 D9 與 GND,用 INPUT_PULLUP(按下 = LOW)。
 const int buttonPin = 9;          // the number of the pushbutton pin
-const int buttonPressInterval = 2000;          // 按住 2 秒觸發
+const int buttonPressInterval = 1000;          // 按住 1 秒觸發
 
 AmebaFatFS fs;
 WiFiClient wifiClient;
@@ -379,7 +379,7 @@ const int wakeRecordSeconds = 8;
 int buttonState = HIGH;                   // variable for reading the pushbutton status
 bool longPressLogged = false;             // 長按門檻只印一次(每次按下重置),避免洗版
 unsigned long buttonPressTime = 0;        // variable to store the time when button was pressed
-bool buttonPressedFor2Seconds = false;    // flag to indicate if button is pressed for at least 2 seconds
+bool buttonPressedLongEnough = false;     // flag to indicate if button is held for at least buttonPressInterval
 int recordingstate = -1;
 int previousRecordingState = -1;
 bool stopArmed = false;                   // 錄音中且按鈕已放開,可接受「再按一下」提前結束
@@ -644,16 +644,16 @@ void loop()
     }
     recordingstate = newRecordingState;
 
-    // check if the button has been held for at least 2 seconds
+    // check if the button has been held for at least buttonPressInterval
     if (buttonState == LOW && millis() - buttonPressTime >= buttonPressInterval) {
-        // button has been pressed for at least 2 seconds
-        buttonPressedFor2Seconds = true;
+        // button has been held past the threshold
+        buttonPressedLongEnough = true;
     } else {
-        // button was released before 2 seconds
-        buttonPressedFor2Seconds = false;
+        // button was released before the threshold
+        buttonPressedLongEnough = false;
     }
-    // if button has been pressed for at least 2 seconds
-    if (buttonPressedFor2Seconds) {
+    // if button has been held past the threshold
+    if (buttonPressedLongEnough) {
         if (!longPressLogged) {
             Serial.println("[BTN] 按住已達 " + String(buttonPressInterval) + " ms 門檻"
                            + "（此刻 recordingstate=" + String(recordingstate) + "）");
