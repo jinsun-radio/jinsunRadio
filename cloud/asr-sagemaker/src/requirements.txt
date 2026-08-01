@@ -1,0 +1,4 @@
+# 版本組合有相依：DLC 的 PyTorch 2.6 wheel 帶 cuDNN 9，CTranslate2 4.6 才吃 cuDNN 9。
+# 換 DLC image 之前先確認 cuDNN 大版本對得上，否則 model load 會炸。
+ctranslate2==4.6.0
+faster-whisper==1.1.1

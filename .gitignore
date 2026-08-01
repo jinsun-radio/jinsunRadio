@@ -1,0 +1,93 @@
+# OS and editor files
+.DS_Store
+*.log
+*.swp
+.history/
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Keep VS Code project settings explicit when needed.
+# .vscode/
+
+# Dart and Flutter
+**/.dart_tool/
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+**/build/
+**/coverage/
+**/doc/api/
+**/app.*.symbols
+**/app.*.map.json
+
+# Flutter iOS and macOS generated files
+**/ios/Flutter/.last_build_id
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/macos/Flutter/ephemeral/
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+**/Pods/
+**/.symlinks/
+**/DerivedData/
+**/xcuserdata/
+
+# Android generated and local files
+**/.gradle/
+**/captures/
+**/.cxx/
+**/local.properties
+**/GeneratedPluginRegistrant.java
+
+# Signing keys and secrets
+**/key.properties
+**/*.keystore
+**/*.jks
+*.env
+*.env.*
+!.env.example
+!.env.*.example
+
+# Firebase / FCM 憑證（推播）：絕不進版控
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase_options.dart
+**/*firebase-adminsdk*.json
+**/service-account*.json
+
+# 推播 webhook trigger migration 內含密鑰（x-webhook-secret），不進版控
+cloud/supabase/migrations/*push_webhooks*.sql
+
+# Supabase CLI 本地暫存（含連線資訊）
+cloud/supabase/.temp/
+
+# Node prototypes and tools
+**/node_modules/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+**/.wrangler/
+**/.dev.vars
+
+# Test and cache artifacts
+**/.cache/
+**/test-results/
+**/playwright-report/
+# brag skill 產生的示範影片輸出（非原始碼）
+brag-output-*/
+
+# 打包產物（APK 等大檔，勿進 git；見 GitHub 100MB 限制）
+dist/
+# Lambda 打包產物（cloud/aws/scripts/build.sh 產生）。
+# 每支 Lambda 一份 node_modules ＋ zip，實測 157MB；voice.zip 單檔就 14MB。
+# 內容全部可由 build.sh 重新產生，沒有進版控的價值。
+cloud/aws/.build/

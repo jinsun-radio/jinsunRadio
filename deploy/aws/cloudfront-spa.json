@@ -1,0 +1,20 @@
+{
+  "_comment": "CloudFront custom error responses — SPA fallback（Flutter 前端路由）。建立 distribution 時帶入此設定，或手動在 console 設。所有 403/404 都回 /index.html（200），讓 Flutter router 處理路由。",
+  "CustomErrorResponses": {
+    "Quantity": 2,
+    "Items": [
+      {
+        "ErrorCode": 403,
+        "ResponsePagePath": "/index.html",
+        "ResponseCode": "200",
+        "ErrorCachingMinTTL": 0
+      },
+      {
+        "ErrorCode": 404,
+        "ResponsePagePath": "/index.html",
+        "ResponseCode": "200",
+        "ErrorCachingMinTTL": 0
+      }
+    ]
+  }
+}

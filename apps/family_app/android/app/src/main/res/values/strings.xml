@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Jitsi SDK 的 DropboxModule 啟動時用 getIdentifier 查這個資源，缺少會直接閃退。
+         本專案不用 Dropbox 整合，給空值即可。 -->
+    <string name="dropbox_app_key" translatable="false"></string>
+</resources>

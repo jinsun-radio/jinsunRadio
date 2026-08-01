@@ -1,0 +1,10 @@
+# 憑證與機密：AWS 一時憑證、Supabase secret 等，絕不進版控
+.env
+.env.*
+!.env.example
+
+# 依賴
+node_modules/
+
+# log / 暫存
+*.log

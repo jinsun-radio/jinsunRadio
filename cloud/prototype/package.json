@@ -1,0 +1,22 @@
+{
+  "name": "jinsun-voice-agent-prototype",
+  "version": "0.1.0",
+  "description": "金孫收音機 · 雲端語音多 Agent server 原型（Intent/Emergency/Needs/Conversation/Device/Memory + Bedrock 可切換 + Supabase 派遣整合）",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "watch": "node scripts/watch.mjs",
+    "bedrock:test": "node --env-file=.env scripts/bedrock-test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.30.2",
+    "@supabase/supabase-js": "^2.111.0",
+    "aedes": "^0.51.3",
+    "mqtt": "^5.15.2"
+  }
+}

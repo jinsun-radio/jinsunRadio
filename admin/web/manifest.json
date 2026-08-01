@@ -1,0 +1,35 @@
+{
+    "name": "金孫收音機 · 社工後台",
+    "short_name": "金孫社工",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#F5F6F8",
+    "theme_color": "#FB923C",
+    "description": "長輩即時狀態、派遣監控、Excel 申報匯出——社區互助派遣的社工指揮中心。",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

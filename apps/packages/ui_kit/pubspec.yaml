@@ -1,0 +1,28 @@
+name: jinsun_ui_kit
+description: 金孫收音機共用設計系統（品牌色、主題、共用元件）
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.9.0
+  flutter: ">=3.35.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_ringtone_player: ^4.0.0+4
+  jinsun_core:
+    path: ../core
+  jitsi_meet_flutter_sdk: ^13.0.0
+  record: ^5.1.2       # 聊天語音輸入錄音（web + iOS + Android）
+  cross_file: ^0.3.4+2 # 跨平台讀取錄音位元組（web blob / 原生檔案路徑）
+  path_provider: ^2.1.4 # 原生錄音暫存路徑（web 不需）
+  url_launcher: ^6.3.2
+  web: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:

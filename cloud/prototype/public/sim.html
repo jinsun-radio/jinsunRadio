@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<title>金孫收音機 · 硬體模擬後台</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+         margin: 0; padding: 16px; background: #0f1419; color: #e6edf3; }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .sub { color: #8b949e; font-size: 12px; margin-bottom: 16px; }
+  .sub b { color: #58a6ff; }
+  .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 940px; }
+  @media (max-width: 700px) { .wrap { grid-template-columns: 1fr; } }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 14px; }
+  .card h2 { font-size: 13px; margin: 0 0 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; }
+  label { display: block; font-size: 12px; color: #8b949e; margin-bottom: 6px; }
+  select, input[type=text] { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #30363d;
+         background: #0d1117; color: #e6edf3; font-size: 15px; margin-bottom: 12px; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button { padding: 12px; border: 0; border-radius: 8px; font-size: 15px; cursor: pointer; color: #fff; font-weight: 600; }
+  button:active { transform: translateY(1px); }
+  .sos { background: #da3633; grid-column: 1 / -1; font-size: 17px; }
+  .fall { background: #bb8009; }
+  .supply { background: #1f6feb; }
+  .ok { background: #238636; }
+  .vol { background: #6e40c9; }
+  .send { background: #30363d; }
+  .row { display: flex; gap: 8px; }
+  .row input { flex: 1; margin-bottom: 0; }
+  .row button { margin: 0; }
+  .speaker { min-height: 140px; max-height: 46vh; overflow-y: auto; }
+  .bubble { background: #0d1117; border-left: 3px solid #238636; padding: 10px 12px; border-radius: 8px;
+            margin-bottom: 8px; font-size: 15px; animation: pop .2s ease; }
+  .bubble.you { border-left-color: #1f6feb; }
+  @keyframes pop { from { opacity: 0; transform: translateY(4px); } }
+  .meta { font-size: 11px; color: #8b949e; margin-top: 4px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
+  .tag.taigi { background: #3a2a12; color: #f0b840; }
+  .tag.mandarin { background: #12293a; color: #58a6ff; }
+  pre { background: #0d1117; padding: 10px; border-radius: 8px; font-size: 12px; overflow-x: auto;
+        max-height: 180px; margin: 0; color: #8b949e; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #238636; margin-right: 6px; }
+  .off { background: #6e7681; }
+</style>
+</head>
+<body>
+  <h1>🔧 金孫收音機 · 硬體模擬後台</h1>
+  <div class="sub">這台是唯一的「假」——模擬 HUB8735 收音機上報事件、播出下行語音。
+    其餘全真：事件寫進 <b>Supabase</b> → 家屬／志工／社工三端即時亮起；志工在 App 接單/抵達後，這裡的喇叭會主動念出進度。</div>
+
+  <div class="wrap">
+    <div class="card">
+      <h2>裝置</h2>
+      <label>選擇長輩收音機（括號為預設偏好語言，家屬 App 可改）</label>
+      <select id="device" onchange="switchDevice()">
+        <option value="JS-0001">JS-0001 · 林阿春（鹿港 · 台語）</option>
+        <option value="JS-0002">JS-0002 · 王金火（員林 · 國語）</option>
+        <option value="JS-0003">JS-0003 · 陳玉蘭（斗六 · 台語）</option>
+      </select>
+
+      <h2>觸發事件（＝長輩對收音機做的事）</h2>
+      <div class="btns">
+        <button class="sos" onclick="fireEvent('sos')">🔴 按下 SOS 鍵（立即升級派遣）</button>
+        <button class="fall" onclick="fireEvent('fall_suspected')">🤕 相機偵測「疑似跌倒」</button>
+        <button class="fall" onclick="say('我跌倒了')">🗣️ 說「我跌倒了」</button>
+        <button class="ok" onclick="say('我沒事啦')">🙆 回應「我沒事」（解除）</button>
+        <button class="supply" onclick="say('我想買牛奶跟雞蛋')">🛒 「我想買牛奶跟雞蛋」</button>
+        <button class="vol" onclick="say('音量大一點')">🔊 「音量大一點」</button>
+      </div>
+      <div style="height:12px"></div>
+      <label>或自訂長輩說的話（走真 Bedrock 分類）</label>
+      <div class="row">
+        <input id="custom" type="text" placeholder="例如：我胸口好痛 / 我睡不著" onkeydown="if(event.key==='Enter')sayCustom()" />
+        <button class="send" onclick="sayCustom()">送出</button>
+      </div>
+      <div class="meta" style="margin-top:12px">流程：跌倒 → 收音機問診 → 20 秒無回應自動升級（開派遣單，三端亮）→
+        你在志工 App 接單 → 這裡喇叭念「志工○○大約○分鐘到」→ 你按「我到了」→ 喇叭念「志工到囉」。</div>
+    </div>
+
+    <div class="card">
+      <h2><span id="poll" class="dot off"></span>收音機喇叭（server 下發的 TTS · 依長輩語言）</h2>
+      <div id="speaker" class="speaker"><div class="meta">觸發事件後，收音機要念的話會出現在這裡…</div></div>
+      <h2 style="margin-top:14px">最後一次 /voice 回應（原始 JSON）</h2>
+      <pre id="raw">尚未觸發</pre>
+    </div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const dev = () => $('device').value;
+
+function langTag(lang) {
+  const l = lang === 'taigi' ? 'taigi' : 'mandarin';
+  const label = l === 'taigi' ? '台語' : '國語';
+  return '<span class="tag ' + l + '">' + label + '</span>';
+}
+
+function bubble(text, { who = '', lang = null } = {}) {
+  const el = $('speaker');
+  const d = document.createElement('div');
+  d.className = 'bubble ' + who;
+  const tag = who === 'you' ? '' : langTag(lang);
+  d.innerHTML = text + tag + '<div class="meta">' + new Date().toLocaleTimeString() +
+    (who === 'you' ? '（長輩說 / 按鍵）' : '（喇叭播）') + '</div>';
+  el.prepend(d);
+}
+
+async function post(body, label) {
+  bubble(label || body.text || ('[事件] ' + body.event), { who: 'you' });
+  try {
+    const r = await fetch('/voice', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json();
+    $('raw').textContent = JSON.stringify(j, null, 2);
+    if (j.reply) bubble('🔊 ' + j.reply, { lang: j.lang });
+    return j;
+  } catch (e) { bubble('⚠️ 連不到 server：' + e.message, {}); }
+}
+const say = (t) => post({ device_serial: dev(), text: t });
+const fireEvent = (e) => post({ device_serial: dev(), event: e }, '[實體事件] ' + e);
+function sayCustom() { const t = $('custom').value.trim(); if (t) { say(t); $('custom').value = ''; } }
+
+// 背景長輪詢下行通道：把 server 稍後主動下發的 speak（急救逾時階梯 / 志工進度）顯示成喇叭播報。
+// 切換裝置時中止當前長輪詢、重開，讓喇叭只反映目前選的收音機。
+let pollCtl = null;
+async function pollLoop() {
+  const ctl = pollCtl = new AbortController();
+  $('poll').className = 'dot';
+  while (!ctl.signal.aborted) {
+    try {
+      const r = await fetch('/commands?device_serial=' + encodeURIComponent(dev()), { signal: ctl.signal });
+      const j = await r.json();
+      for (const c of (j.commands || [])) {
+        if (c.type === 'speak') bubble('🔊 ' + c.text, { lang: c.lang });
+        else if (c.type === 'device') bubble('⚙️ 執行裝置指令：' + c.command, { lang: c.lang });
+      }
+    } catch (e) {
+      if (ctl.signal.aborted) return;
+      $('poll').className = 'dot off';
+      await new Promise((res) => setTimeout(res, 1500));
+      $('poll').className = 'dot';
+    }
+  }
+}
+function switchDevice() {
+  if (pollCtl) pollCtl.abort();
+  $('speaker').innerHTML = '<div class="meta">已切換到 ' + dev() + '，等待事件…</div>';
+  pollLoop();
+}
+pollLoop();
+</script>
+</body>
+</html>

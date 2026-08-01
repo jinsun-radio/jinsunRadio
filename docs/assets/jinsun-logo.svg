@@ -1,0 +1,37 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <!-- 金孫收音機 品牌標誌（雙色心）。匯入 Figma 後每個圖層都可獨立調整：
+       顏色改 fill、波浪／心形改 path 節點、圓角改 #frame 的 rx。 -->
+  <title>金孫收音機 Logo</title>
+
+  <!-- 可調：品牌色（Figma 裡選圖層改 fill 即可）
+       溫暖橘 #FB923C  ・  科技藍 #3B82F6  ・  白 #FFFFFF  ・  底 #F5F6F8 -->
+
+  <defs>
+    <clipPath id="frame">
+      <rect x="8" y="8" width="240" height="240" rx="60"/>
+    </clipPath>
+  </defs>
+
+  <!-- 外框（圓角方；改 rx 調圓角，改 fill 調底色） -->
+  <rect id="bg" x="8" y="8" width="240" height="240" rx="60" fill="#F5F6F8"/>
+
+  <g clip-path="url(#frame)">
+    <!-- 溫暖橘：上半（波浪為下緣，可拖節點調弧度） -->
+    <path id="orange" fill="#FB923C"
+      d="M8,8 H248 V118 C210,150 176,124 148,150 C118,178 70,142 8,164 Z"/>
+
+    <!-- 科技藍：下半波浪（上緣與橘色共用同一條波浪縫） -->
+    <path id="blue" fill="#3B82F6"
+      d="M8,164 C70,142 118,178 148,150 C176,124 210,150 248,118 V248 H8 Z"/>
+
+    <!-- 白色心：中央負空間（改節點調心形胖瘦、上下位置） -->
+    <path id="heart" fill="#FFFFFF"
+      d="M128,178
+         C108,150 78,142 78,112
+         C78,92 96,80 112,90
+         C120,95 125,103 128,110
+         C131,103 136,95 144,90
+         C160,80 178,92 178,112
+         C178,142 148,150 128,178 Z"/>
+  </g>
+</svg>

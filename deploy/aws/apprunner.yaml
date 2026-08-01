@@ -1,0 +1,57 @@
+# ECS Fargate service 定義（語音 Agent server）
+# 對應 render.yaml，但跑在 AWS ECS Fargate + ALB 上。
+#
+# 這個檔案是給人讀的宣告式設定參考；實際部署由 deploy-server.sh 執行。
+
+service:
+  name: jinsun-voice-server
+  region: us-west-2
+
+# ECS Fargate 架構：
+#   Internet → ALB (HTTP:80) → Target Group → ECS Task (port 8787)
+#   Task 跑在 public subnet，assignPublicIp=ENABLED（才能拉 ECR image）
+
+source:
+  type: ecr
+  repository: jinsun-voice-server
+  tag: latest
+  dockerfile: ./cloud/prototype/Dockerfile
+  context: ./cloud/prototype
+
+cluster:
+  name: jinsun-cluster
+
+task:
+  cpu: 256          # 0.25 vCPU
+  memory: 512       # 0.5 GB
+  port: 8787
+  desired_count: 1  # 常駐 1 個 task（demo 夠用）
+
+load_balancer:
+  name: jinsun-alb
+  type: application
+  scheme: internet-facing
+  listener: HTTP:80
+  health_check:
+    path: /health
+    interval: 30
+    healthy_threshold: 2
+    unhealthy_threshold: 3
+
+# 環境變數（非機密）
+environment:
+  LLM_PROVIDER: apikey
+  LLM_API_BASE: https://llm-gateway.xcc.tw/v1
+  LLM_API_AUTH: x-bf-vk
+  LLM_API_MODEL: gpt-5.6-luna
+  LLM_API_FAST_MODEL: gpt-5.6-luna
+  SUPABASE_URL: https://ykfxmoubynnbhnburawl.supabase.co
+  MQTT_URL: "mqtts://mqttgo.io:8883"
+  TRAVEL_STEPS: "20"
+  TRAVEL_STEP_MS: "3000"
+
+# 機密環境變數（目前直接放 env，正式環境應改用 Secrets Manager）
+secrets:
+  - LLM_API_KEY                # XCC Gateway PAT（sk-bf-...）
+  - SUPABASE_SECRET_KEY        # sb_secret_...（服務端讀寫 Supabase 用）
+  - AWS_BEARER_TOKEN_BEDROCK   # Bedrock API Key（ABSK...，僅切到 bedrock 才需要）

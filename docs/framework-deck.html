@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>金孫收音機｜系統框架簡報</title>
+<style>
+  :root{
+    --orange:#F96C1A; --orange-deep:#C2560B; --orange-bg:#FFEEE0;
+    --blue:#1B8FD6; --blue-deep:#0E6EA8; --blue-bg:#E4F2FC;
+    --yellow-bg:#FDEFC6; --yellow-text:#8A6100;
+    --red:#CD2018; --ok:#1E7E34;
+    --ink:#211913; --muted:#6C6C72; --line:#E7E1D6; --bg:#F6F1EA; --card:#fff;
+    --font:"PingFang TC","PingFang SC","Hiragino Sans GB","Heiti TC","Microsoft JhengHei",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--font);background:#000;color:var(--ink);overflow:hidden}
+  .stage{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(120% 120% at 50% 0,#1c1712,#0c0a08)}
+  .deck{position:relative;width:min(100vw,177.7vh);height:min(100vh,56.25vw);background:var(--bg);
+    box-shadow:0 30px 90px rgba(0,0,0,.6);overflow:hidden}
+  .slide{position:absolute;inset:0;padding:6.2% 7%;opacity:0;visibility:hidden;
+    transition:opacity .35s ease;display:flex;flex-direction:column;justify-content:center}
+  .slide.on{opacity:1;visibility:visible}
+  .kick{font-size:1.5vh;font-weight:800;letter-spacing:.25em;color:var(--orange-deep);text-transform:uppercase;margin-bottom:1.4vh}
+  .kick.b{color:var(--blue-deep)}
+  h1{font-size:6.6vh;font-weight:900;line-height:1.08;letter-spacing:.01em}
+  h2{font-size:4.6vh;font-weight:900;line-height:1.12;margin-bottom:2.4vh}
+  .lead{font-size:2.5vh;color:var(--muted);line-height:1.6;font-weight:500}
+  .big{font-size:3.4vh;font-weight:800;line-height:1.4}
+  .accent{color:var(--orange-deep)} .accent-b{color:var(--blue-deep)}
+  .row{display:flex;gap:2.2vh;flex-wrap:wrap}
+  .col{flex:1 1 0;min-width:0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:1.8vh;padding:2.6vh 2.6vh;
+    box-shadow:0 1.2vh 3vh rgba(120,80,20,.06)}
+  .card h3{font-size:2.5vh;font-weight:800;margin-bottom:1vh;display:flex;align-items:center;gap:1vh}
+  .card p,.card li{font-size:1.95vh;color:var(--muted);line-height:1.55;font-weight:500}
+  .card ul{list-style:none;display:flex;flex-direction:column;gap:.8vh;margin-top:.6vh}
+  .card li::before{content:"▪";color:var(--orange);margin-right:.8vh}
+  .pill{display:inline-block;font-size:1.7vh;font-weight:800;padding:.5vh 1.6vh;border-radius:999px}
+  .p-o{background:var(--orange-bg);color:var(--orange-deep)}
+  .p-b{background:var(--blue-bg);color:var(--blue-deep)}
+  .p-y{background:var(--yellow-bg);color:var(--yellow-text)}
+  .p-r{background:#FDE7E7;color:var(--red)}
+  .p-g{background:#E3F7E8;color:var(--ok)}
+  .loop{display:flex;align-items:center;gap:1.4vh;flex-wrap:wrap;margin-top:2vh}
+  .loop .n{background:#fff;border:2px solid var(--orange);color:var(--orange-deep);font-weight:900;
+    font-size:2.6vh;padding:1.3vh 2.6vh;border-radius:1.4vh}
+  .loop .a{color:var(--orange);font-size:3vh;font-weight:900}
+  /* three-layer stack */
+  .layer{border-radius:1.6vh;padding:2vh 2.4vh;margin-bottom:1.4vh;border:1px solid var(--line)}
+  .layer .t{font-size:2.4vh;font-weight:800} .layer .d{font-size:1.8vh;color:var(--muted);margin-top:.5vh;font-weight:500}
+  .ly-dark{background:linear-gradient(90deg,#eaf5ee,#dff0e6);border-color:#bfe3cd}
+  .ly-blue{background:var(--blue-bg);border-color:#c4e2f5}
+  .ly-orange{background:var(--orange-bg);border-color:#f6d7bf}
+  .conn{text-align:center;color:var(--muted);font-size:1.7vh;font-weight:700;margin:.4vh 0}
+  .four{display:grid;grid-template-columns:1fr 1fr;gap:2vh}
+  .lane3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2vh}
+  .foot{position:absolute;left:7%;right:7%;bottom:3.4vh;display:flex;justify-content:space-between;
+    align-items:center;font-size:1.5vh;color:var(--muted);font-weight:600}
+  .foot .brand{color:var(--orange-deep);font-weight:900}
+  .num{font-variant-numeric:tabular-nums}
+  .cover{background:radial-gradient(130% 120% at 15% 10%,#2a2016,#141210);color:#fff}
+  .cover h1{font-size:8.4vh} .cover .lead{color:#d9cdb6}
+  .cover .kick{color:var(--orange)}
+  .radio-badge{width:8vh;height:8vh;border-radius:2vh;background:linear-gradient(160deg,#efe7d7,#d9cdb4);
+    display:grid;place-items:center;margin-bottom:3vh;box-shadow:0 2vh 5vh rgba(0,0,0,.4)}
+  .radio-badge div{width:2.4vh;height:2.4vh;border-radius:50%;background:var(--red)}
+  /* nav */
+  .dots{position:fixed;bottom:2vh;left:50%;transform:translateX(-50%);display:flex;gap:1vh;z-index:10}
+  .dots i{width:1vh;height:1vh;border-radius:50%;background:#fff5;cursor:pointer;transition:.2s}
+  .dots i.on{background:var(--orange);transform:scale(1.4)}
+  .hint{position:fixed;bottom:2vh;right:2.4vh;color:#fff6;font-size:1.5vh;z-index:10}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="deck" id="deck">
+
+    <!-- 1 Cover -->
+    <section class="slide cover on">
+      <div class="radio-badge"><div></div></div>
+      <div class="kick">2026 AI 創新獎・智慧照護與居家健康</div>
+      <h1>金孫收音機</h1>
+      <p class="lead" style="margin-top:2.4vh;font-size:3vh">給獨居與失能長者的<br>近端 AI 陪伴與社區互助派遣系統</p>
+      <p class="lead" style="margin-top:3vh;font-size:2vh">— 系統框架簡報 —</p>
+    </section>
+
+    <!-- 2 痛點 -->
+    <section class="slide">
+      <div class="kick">Problem</div>
+      <h2>兩端同時在痛</h2>
+      <div class="row">
+        <div class="col card"><h3>🏠 長輩端</h3>
+          <p>獨居長者跌倒的那一刻，<span class="accent">沒有人知道</span>。日常提醒、求助、陪伴，全都缺席。</p></div>
+        <div class="col card"><h3>🧑‍⚕️ 照顧體系端</h3>
+          <p>社工「三高三低」、案量爆炸、<span class="accent-b">社工大逃亡</span>——例行探視、紀錄、申報把人力磨光。</p></div>
+      </div>
+      <p class="big" style="margin-top:2.6vh">真正要解的，是一條把 <span class="accent">感知</span> 接到 <span class="accent-b">人力</span> 的閉環。</p>
+      <div class="foot"><span class="brand">金孫收音機</span><span class="num">02</span></div>
+    </section>
+
+    <!-- 3 定位 + 閉環 -->
+    <section class="slide">
+      <div class="kick">Positioning</div>
+      <h2>不是讓長輩學會用 App</h2>
+      <p class="big">而是讓 AI 長得像他<span class="accent">本來就會用的收音機</span>。<br>零學習成本：語音・燈號・鈴聲・一顆 SOS 按鈕。</p>
+      <div class="loop">
+        <span class="n">感知</span><span class="a">→</span>
+        <span class="n">決策</span><span class="a">→</span>
+        <span class="n">行動</span><span class="a">→</span>
+        <span class="n">回報</span>
+      </div>
+      <div class="foot"><span class="brand">金孫收音機</span><span class="num">03</span></div>
+    </section>
+
+    <!-- 4 三層框架 -->
+    <section class="slide">
+      <div class="kick">Framework</div>
+      <h2>三層系統框架</h2>
+      <div class="layer ly-dark"><div class="t">① 家中近端　<span class="pill p-g">國產晶片・預設不上雲</span></div>
+        <div class="d">跌倒視覺推論／關鍵字偵測／TTS 播報／SOS — 皆在裝置本地完成</div></div>
+      <div class="conn">↕ MQTT / TLS：只送「事件」，永不送影音</div>
+      <div class="layer ly-blue"><div class="t">② AWS 雲端　<span class="pill p-b">事件觸發才上雲</span></div>
+        <div class="d">語音多 Agent・派遣狀態機・分級與 20 秒升級・ASR／LLM／TTS</div></div>
+      <div class="conn">↕ WebSocket / AppSync：即時推播（Cognito 分角色）</div>
+      <div class="layer ly-orange"><div class="t">③ 使用者端　<span class="pill p-o">三端聯動</span></div>
+        <div class="d">家屬 App　·　志工 App　·　社工 Web 後台</div></div>
+      <div class="foot"><span class="brand">金孫收音機</span><span class="num">04</span></div>
+    </section>
+
+    <!-- 5 四約束 -->
+    <section class="slide">
+      <div class="kick">Constraints</div>
+      <h2>四條不可違反的架構約束</h2>
+      <div class="four">
+        <div class="card"><h3><span class="pill p-g">1</span> 隱私邊界</h3><p>裝置↔雲端只傳事件，影像永不外傳；僅長輩主動語音求助那段才上雲 ASR。</p></div>
+        <div class="card"><h3><span class="pill p-o">2</span> 長輩端無 UI</h3><p>不用 App、不看螢幕。互動全靠語音、燈號、鈴聲與實體 SOS 按鈕。</p></div>
+        <div class="card"><h3><span class="pill p-r">3</span> 升級時效</h3><p>疑似跌倒 → 語音詢問 → 20 秒無回應即升級（推播家屬＋發派遣單）。</p></div>
+        <div class="card"><h3><span class="pill p-b">4</span> Excel 申報</h3><p>社工後台必備 Excel 匯出，對接政府申報硬需求。</p></div>
+      </div>
+      <div class="foot"><span class="brand">金孫收音機</span><span class="num">05</span></div>
+    </section>
+
+    <!-- 6 感知層 硬體 -->
+    <section class="slide">
+      <div class="kick">Sense · 感知層</div>
+      <h2>國產晶片・隱私守在家</h2>
+      <div class="row">
+        <div class="col card"><h3>Himax WiseEye2</h3><p>奇景光電｜跌倒視覺推論，<span class="accent">影像不外傳</span>、本地端運算。</p></div>
+        <div class="col card"><h3>Realtek AmebaPro2</h3><p>瑞昱｜主控・麥克風・Wi-Fi・BLE 5.1 配網・TTS 發聲。</p></div>
+      </div>
+      <p class="lead" style="margin-top:2.4vh">實測韌體 <b>HUB8735 Ultra</b>：按鈕錄音 → 雲端 ASR → LLM → 雲端 TTS 播放；上行 <code>POST /voice</code>、下行 MQTT 訂閱 <code>jinsun/{serial}/cmd</code>。</p>
+      <div class="foot"><span class="brand">金孫收音機</span><span class="num">06</span></div>
+    </section>
+
+    <!-- 7 決策層 雲端 -->
+    <section class="slide">
+      <div class="kick b">Decide · 決策層</div>
+      <h2>雲端大腦：多 Agent × 狀態機</h2>
+      <div class="row">
+        <div class="col card"><h3>🧠 語音多 Agent</h3><ul>
+          <li>Intent 意圖分類</li><li>Emergency 緊急升級</li><li>Needs 需求解析</li>
+          <li>Conversation 陪伴</li><li>Device 裝置控制</li><li>Memory 長期記憶</li></ul></div>
+        <div class="col card"><h3>⚙️ 派遣狀態機</h3><p>事件分級・20 秒升級・就近派工・卡單改派・到場回報。</p>
+          <p style="margin-top:1vh">AWS 對應：IoT Core／API GW+Lambda／Step Functions／Bedrock·Transcribe·Polly／DynamoDB+Cognito。</p></div>
+      </div>
+      <p class="lead" style="margin-top:2vh">現行原型：<b>Supabase</b>（即時同步真後端）＋ <b>Node.js</b> Agent server，介面設計成可平移 AWS。</p>
+      <div class="foot"><span class="brand">金孫收音機</span><span class="num">07</span></div>
+    </section>
+
+    <!-- 8 行動層 三端 -->
+    <section class="slide">
+      <div class="kick">Act · 行動層</div>
+      <h2>三端聯動・雙軌推播</h2>
+      <div class="lane3">
+        <div class="card"><h3><span class="pill p-o">家屬</span></h3><p>安心日報・緊急通知・派遣進度・BLE 藍牙配網。</p></div>
+        <div class="card"><h3><span class="pill p-b">志工</span></h3><p>就近接單・時間銀行・可服務時段・證件狀態。</p></div>
+        <div class="card"><h3><span class="pill p-y">社工</span></h3><p>異常置頂 dashboard・派遣監控・Excel 匯出。</p></div>
+      </div>
+      <p class="lead" style="margin-top:2.4vh">推播雙軌：<b>前景</b> Supabase Realtime 即時同步　＋　<b>背景</b> FCM（Android）／APNs（iOS）系統通知。推播只帶事件文字，不含影音。</p>
+      <div class="foot"><span class="brand">金孫收音機</span><span class="num">08</span></div>
+    </section>
+
+    <!-- 9 時間銀行 -->
+    <section class="slide">
+      <div class="kick">Report · 回報層</div>
+      <h2>時間銀行・社區互助</h2>
+      <div class="row">
+        <div class="col card"><h3>💛 真實時數帳本</h3><p>完成派遣累積服務時數（<code>time_bank_ledger</code> 加總），可兌換物資或折算現金。</p></div>
+        <div class="col card"><h3>🤝 就近互助派遣</h3><p>緊急就近派單・3 分鐘卡單自動改派・全體補位，把到場人力分流給社區志工。</p></div>
+      </div>
+      <p class="big" style="margin-top:2.6vh">互助不是單向付出——<span class="accent">把善意存起來</span>，維持在地照顧網絡。</p>
+      <div class="foot"><span class="brand">金孫收音機</span><span class="num">09</span></div>
+    </section>
+
+    <!-- 10 三軌分流 -->
+    <section class="slide">
+      <div class="kick">Optimization</div>
+      <h2>優化：三軌分流閉環　<span class="pill p-g" style="font-size:1.6vh">已實作</span></h2>
+      <div class="lane3">
+        <div class="card"><h3>🔴 緊急軌</h3><p>SOS／求救 → 20 秒升級 → 志工到場 → 時間銀行 ×1.5。</p></div>
+        <div class="card"><h3>🟡 注意軌</h3><p>疑似跌倒回應無恙 → 趨勢累積 → <span class="accent-b">督導個管待辦</span>，不派志工、不推播。</p></div>
+        <div class="card"><h3>🟢 平常軌</h3><p>物資／日常關懷 → 在地志工，小額計點維繫網絡。</p></div>
+      </div>
+      <p class="lead" style="margin-top:2.2vh">貫穿全程 <b>自動留痕</b> → 一鍵 Excel 申報。把稀缺專業人力留給專業判斷。<span class="accent">核心狀態機 14 項測試通過。</span></p>
+      <div class="foot"><span class="brand">金孫收音機</span><span class="num">10</span></div>
+    </section>
+
+    <!-- 11 技術棧與現況 -->
+    <section class="slide">
+      <div class="kick b">Stack · Status</div>
+      <h2>技術棧與現況</h2>
+      <div class="four">
+        <div class="card"><h3>📱 三端</h3><p>Flutter（Android／iOS／Web）＋ 共用 <code>jinsun_core</code> 狀態機／資料層、<code>ui_kit</code> 設計系統。</p></div>
+        <div class="card"><h3>☁️ 後端</h3><p>Supabase（現行真後端・即時同步）＋ Node.js 語音 Agent（Render 部署）。</p></div>
+        <div class="card"><h3>🔌 韌體</h3><p>Arduino / AmebaPro2，HUB8735 Ultra <b>已實測</b>跑通上下行契約。</p></div>
+        <div class="card"><h3>✅ 進度</h3><p>Phase 1 閉環已實作、三端可跑、有測試；資料層已接真後端。</p></div>
+      </div>
+      <div class="foot"><span class="brand">金孫收音機</span><span class="num">11</span></div>
+    </section>
+
+    <!-- 12 願景 -->
+    <section class="slide cover">
+      <div class="kick">Vision</div>
+      <h1 style="font-size:6vh">讓長輩安心・家屬放心<br>社工減壓・社區互助</h1>
+      <div class="loop" style="margin-top:4vh">
+        <span class="n">感知</span><span class="a">→</span>
+        <span class="n">決策</span><span class="a">→</span>
+        <span class="n">行動</span><span class="a">→</span>
+        <span class="n">回報</span>
+      </div>
+      <p class="lead" style="margin-top:4vh;color:#d9cdb6">金孫收音機｜2026 AI 創新獎・智慧照護與居家健康</p>
+    </section>
+
+  </div>
+</div>
+<div class="dots" id="dots"></div>
+<div class="hint">← → 翻頁</div>
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const dotsBox=document.getElementById('dots');
+  let i=0;
+  slides.forEach((_,k)=>{const d=document.createElement('i');d.onclick=()=>go(k);dotsBox.appendChild(d);});
+  const dots=[...dotsBox.children];
+  function go(n){i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach((s,k)=>s.classList.toggle('on',k===i));
+    dots.forEach((d,k)=>d.classList.toggle('on',k===i));}
+  function next(){go(i+1)} function prev(){go(i-1)}
+  document.addEventListener('keydown',e=>{
+    if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){e.preventDefault();next();}
+    if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();prev();}
+    if(e.key==='Home')go(0); if(e.key==='End')go(slides.length-1);
+  });
+  document.getElementById('deck').addEventListener('click',e=>{
+    const r=e.currentTarget.getBoundingClientRect();
+    (e.clientX-r.left)/r.width>0.5?next():prev();
+  });
+  go(0);
+</script>
+</body>
+</html>

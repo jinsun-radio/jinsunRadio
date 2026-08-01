@@ -1,0 +1,7 @@
+# 從 HuggingFace 抓下來的 CTranslate2 權重（3.1GB），由 scripts/fetch-model.sh 重建，絕不進版控
+model/
+# invoke 的暫存輸出
+.out.json
+.err.txt
+.payload.json
+.payload.bin

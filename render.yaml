@@ -1,0 +1,66 @@
+# 語音 Agent server 部署到 Render（常駐 Web Service）。
+# 用法：Render Dashboard → New → Blueprint → 指到本 repo（分支選有這支檔的分支）→ 讀本檔。
+# 機密（sync:false）在 Render Dashboard 手動填，不進版控。
+services:
+  - type: web
+    name: jinsun-voice-server
+    runtime: docker
+    plan: free
+    dockerfilePath: ./cloud/prototype/Dockerfile
+    dockerContext: ./cloud/prototype
+    healthCheckPath: /health
+    envVars:
+      # 預設供應商＝apikey（AWS 已抽掉）。實際生效可由社工後台即時切換
+      # （寫 Supabase app_settings.llm_provider；server 每次呼叫前讀，約 10 秒生效）。
+      # 這裡的 LLM_PROVIDER 只是「讀不到設定時」的預設。
+      - key: LLM_PROVIDER
+        value: apikey
+      # ---- apikey（OpenAI 相容閘道，預設 XCC Gateway，與 ASR 同一把金鑰）----
+      - key: LLM_API_BASE
+        value: https://llm-gateway.xcc.tw/v1
+      - key: LLM_API_AUTH
+        value: x-bf-vk            # XCC 用 x-bf-vk 標頭；一般 OpenAI 相容設 bearer
+      - key: LLM_API_MODEL        # ⚠️ 換成閘道實際提供的對話模型 ID
+        value: gpt-5.6-luna
+      - key: LLM_API_FAST_MODEL   # 意圖分類用（不填＝同上）
+        value: gpt-5.6-luna
+      - key: SUPABASE_URL
+        value: https://ykfxmoubynnbhnburawl.supabase.co
+      # ---- demo 志工移動模擬（travel.js；正式版由真實 GPS 驅動，設 DEMO_TRAVEL=0 關閉）----
+      # 預設 12 步×2 秒＝24 秒走完全程，對錄影太快：地圖上看不到移動，而且每步跨距太大，
+      # 座標會從 250m 外「跳」進 60m 內，接近預告會被「太近就不預告」的判斷正確擋掉。
+      # 20 步×3 秒＝60 秒；配志工起點約 1.5 km（每步約 73m），第 17 步剩約 219m 觸發
+      # 接近預告，第 20 步到場，兩者間隔約 9 秒，剪得開。
+      - key: TRAVEL_STEPS
+        value: "20"
+      - key: TRAVEL_STEP_MS
+        value: "3000"
+      # 下行 MQTT：Render 只對外開 443，內嵌 broker 的 1883 從公網進不來，
+      # 所以 server 當 client 連公共 broker，與裝置在同一顆上會合。
+      # 定案用 mqttgo.io TLS 8883——韌體那端一定要 TLS（實測此核心純 TCP 收不到資料），
+      # 憑證由 Let's Encrypt 簽發、板子內嵌 ISRG Root X1 即可，server 用 Node 內建 CA。
+      # 兩端必須是同一顆 broker，改這裡就要同步改韌體的 mqtt_server。
+      - key: MQTT_URL
+        value: mqtts://mqttgo.io:8883
+      # ---- bedrock（AWS）：僅在後台切到 bedrock 時才需要，非預設 ----
+      - key: BEDROCK_GATEWAY
+        value: standard
+      - key: AWS_REGION
+        value: us-west-2
+      - key: BEDROCK_MODEL_ID
+        value: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+      - key: BEDROCK_FAST_MODEL_ID
+        value: us.anthropic.claude-haiku-4-5-20251001-v1:0
+      # ↓↓↓ 機密：在 Render Dashboard 填，勿進版控 ↓↓↓
+      # apikey 供應商的金鑰（XCC Gateway PAT，送 x-bf-vk）——用 apikey 就必填。
+      - key: LLM_API_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY      # sb_secret_...（服務端讀 app_settings／寫入用）
+        sync: false
+      # AWS 憑證：只有切到 bedrock 才需要（預設 apikey 可留空）。
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_SESSION_TOKEN        # 一時憑證必填；換 IAM 長期憑證後可刪
+        sync: false
