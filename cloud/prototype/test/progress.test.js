@@ -89,16 +89,18 @@ test('接近預告：>250m 不播；進到門檻內播一次，之後去重不�
   assert.equal(sent.length, 0, '還有 800m，不該播');
 
   await w.onVolunteerLocation({ name: '阿明', lat: northOf(180), lng: ELDER.lng });
-  assert.equal(sent.length, 1, '進到門檻內應播一次「開門」');
+  assert.equal(sent.length, 1, '進到門檻內應播一次到場提示');
   assert.equal(sent[0].s, 'JS-0001');
   assert.equal(sent[0].c.type, 'speak');
-  assert.match(sent[0].c.text, /開門|門口/);
+  // 到場提示叫長輩「待在原地」，絕不含「開門／門口」措辭（不讓長輩起身應門）
+  assert.match(sent[0].c.text, /待在原地|進來看您/);
+  assert.doesNotMatch(sent[0].c.text, /開門|門口|敲門/);
 
   await w.onVolunteerLocation({ name: '阿明', lat: northOf(120), lng: ELDER.lng });
-  assert.equal(sent.length, 1, '同一單只播一次「開門」');
+  assert.equal(sent.length, 1, '同一單只播一次到場提示');
 });
 
-test('開門：就算志工已很近（≤60m）也照播一次「開門」，不再靜默', async () => {
+test('到場：就算志工已很近（≤60m）也照播一次到場提示，不再靜默', async () => {
   const sent = [];
   const w = createProgressWorker({
     downlink: { enqueue: (s, c) => sent.push({ s, c }) },
@@ -111,8 +113,9 @@ test('開門：就算志工已很近（≤60m）也照播一次「開門」，�
     }),
   });
   await w.onVolunteerLocation({ name: '阿明', lat: northOf(30), lng: ELDER.lng });
-  assert.equal(sent.length, 1, '到門口只播一次「開門」');
-  assert.match(sent[0].c.text, /開門|門口/);
+  assert.equal(sent.length, 1, '到場只播一次到場提示');
+  assert.match(sent[0].c.text, /待在原地|進來看您/);
+  assert.doesNotMatch(sent[0].c.text, /開門|門口|敲門/);
 });
 
 test('接近預告：只看自己「前往中」的單；沒座標的上報略過', async () => {

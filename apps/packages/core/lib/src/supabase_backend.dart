@@ -61,6 +61,12 @@ class SupabaseBackend extends BackendClient {
   bool _tasksSeeded = false;
   final Map<String, DispatchStatus> _knownTaskStatus = {};
 
+  // 內容指紋：重抓後若原始 rows 與上次完全相同，就不再 emit。8 秒保底輪詢與多路
+  // Realtime 回呼常帶回一模一樣的資料，若每次都 emit，三端的 StreamBuilder（尤其社工後台
+  // 的 FlutterMap）會整片重繪、地圖磚重載 → 畫面閃爍。AwsBackend 靠 /data/version 指紋，
+  // Supabase 沒有版本端點，就地用 rows 的 JSON 當指紋比對（任何欄位變動都會不同 → 照常更新）。
+  String? _sigElders, _sigEvents, _sigTasks, _sigVols, _sigMsgs;
+
   @override
   Stream<List<Elder>> get elders => _eldersCtrl.stream;
   @override
@@ -216,6 +222,9 @@ class SupabaseBackend extends BackendClient {
 
   Future<void> _loadElders() async {
     final rows = await _sb.from('elders').select().order('id');
+    final sig = jsonEncode(rows);
+    if (sig == _sigElders) return; // 內容沒變 → 不重繪（地圖不閃）
+    _sigElders = sig;
     _elders
       ..clear()
       ..addAll(rows.map(_elderFrom));
@@ -228,6 +237,9 @@ class SupabaseBackend extends BackendClient {
         .select()
         .order('occurred_at', ascending: false)
         .limit(2000);
+    final sig = jsonEncode(rows);
+    if (sig == _sigEvents) return; // 內容沒變 → 不重繪、不重複判斷通知
+    _sigEvents = sig;
     final list = rows.map(_eventFrom).toList();
     // 對「Realtime 帶進來的新事件」跳通知（初次載入不跳）。由舊到新，順序自然。
     if (_eventsSeeded) {
@@ -251,6 +263,9 @@ class SupabaseBackend extends BackendClient {
         .select()
         .order('created_at', ascending: false)
         .limit(2000);
+    final sig = jsonEncode(rows);
+    if (sig == _sigTasks) return; // 內容沒變 → 不重繪、不重複判斷通知
+    _sigTasks = sig;
     final list = rows.map(_taskFrom).toList();
     if (_tasksSeeded) {
       for (final t in list.reversed) {
@@ -332,9 +347,10 @@ class SupabaseBackend extends BackendClient {
   Future<void> _loadVolunteers() async {
     // 志工基本資料 + 證件（另一張表，依 volunteer_id 分組後掛回）
     final rows = await _sb.from('volunteers').select().order('id');
+    List<dynamic> certRows = const [];
     final certsByVol = <String, List<VolunteerCertificate>>{};
     try {
-      final certRows = await _sb.from('volunteer_certificates').select();
+      certRows = await _sb.from('volunteer_certificates').select();
       for (final c in certRows) {
         final vid = (c['volunteer_id'] ?? '') as String;
         (certsByVol[vid] ??= []).add(certificateFromRow(c));
@@ -342,6 +358,9 @@ class SupabaseBackend extends BackendClient {
     } catch (_) {
       // 表不存在時（尚未套用新 schema）不擋 App，證件顯示為空。
     }
+    final sig = jsonEncode([rows, certRows]);
+    if (sig == _sigVols) return; // 志工資料/座標/證件都沒變 → 不重繪
+    _sigVols = sig;
     _volunteers
       ..clear()
       ..addAll(rows.map((r) =>
@@ -355,6 +374,9 @@ class SupabaseBackend extends BackendClient {
         .select()
         .order('created_at')
         .limit(500);
+    final sig = jsonEncode(rows);
+    if (sig == _sigMsgs) return; // 內容沒變 → 不重繪
+    _sigMsgs = sig;
     _messages
       ..clear()
       ..addAll(rows.map(_messageFrom));
