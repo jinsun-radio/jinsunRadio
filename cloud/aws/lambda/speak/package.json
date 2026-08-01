@@ -1,0 +1,10 @@
+{
+  "name": "jinsun-speak",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1101.0",
+    "@aws-sdk/client-iot-data-plane": "^3.1101.0",
+    "@aws-sdk/lib-dynamodb": "^3.1101.0"
+  }
+}

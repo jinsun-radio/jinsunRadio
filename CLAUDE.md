@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 目前進度：Phase 1 閉環已實作（spec 見 `docs/requirements/phase1-mvp.md`）——`jinsun_core` 狀態機＋三端 UI 可跑、有測試，資料層已接 Supabase 真後端（三端共用、即時同步；`MockBackend` 保留作 demo 模擬）。`cloud/prototype/` 語音多 Agent server 已建（見 `docs/requirements/voice-agent-server.md`）。`firmware/` 已有 HUB8735 Ultra 實測韌體（`firmware/HUB-8735-Ultra-ASR-TTS.ino`：按鈕錄音 → 雲端 ASR → `POST /voice` → 雲端 TTS 播放），**已接上雲端契約**（上行打 Render 正式站 `https://jinsun-voice-server-mg1f.onrender.com/voice`＋下行 MQTT 訂閱 `jinsun/{serial}/cmd`；Render 只開 443，MQTT 靠外部 broker 會合——server 設 `MQTT_URL=mqtts://mqttgo.io:8883`（免 CA 檔），裝置照官方 MQTT-over-TLS 範例連同一顆、setRootCA 用 ISRG Root X1（實測此核心純 TCP 收不到資料、僅 `WiFiSSLClient` 可靠），細節見 `docs/requirements/hardware-integration.md`）；**ASR/TTS 實作上都走雲端服務**（僅長輩主動觸發那段語音上雲，符合約束 1），細節見 `docs/requirements/hardware-integration.md`。
 
+另有一套**與正式環境完全獨立的 AWS 平行環境**在 `cloud/aws/`（API Gateway + Lambda + Step Functions + IoT Core + Aurora + Cognito），四端（家屬／志工／社工／長輩）靠 `--dart-define=BACKEND=aws` 切換（唯一切換點是 `apps/packages/core/lib/src/backend_factory.dart`），韌體靠 `.ino` 開頭的 `#define BACKEND_AWS`（走 AWS 要另外燒 IoT 裝置憑證，見 `firmware/README.md`）。**兩套環境不共用資料庫**，接手前先讀 `docs/requirements/aws-handoff.md`。
+
 完整架構圖與跌倒偵測 sequence diagram 在 `docs/architecture.md`，修改任何一端之前先讀它。
 
 ## 不可違反的架構約束
@@ -27,10 +29,14 @@ jinsun-radio/
 │   └── requirements/         需求文件、user story、場域驗證 KPI（建立時放這）
 ├── firmware/                 長輩端韌體（Himax WiseEye2 + Realtek AmebaPro2）
 ├── cloud/                    雲端後端
-│   └── prototype/            本地 Node.js 原型（建立時放這，見下方）
+│   ├── prototype/            本地 Node.js 原型（建立時放這，見下方）
+│   ├── supabase/             正式環境的 schema 與 Edge Functions（schema 是兩套環境的單一來源）
+│   └── aws/                  AWS 平行環境（Lambda / Step Functions / IoT policy / 部署腳本）
+├── deploy/                   部署腳本（S3 + CloudFront 三端靜態站、ECS Fargate 參考設定）
 ├── apps/                     所有 Flutter 程式碼（見下方 Flutter 規劃）
 │   ├── family_app/           家屬 App
 │   ├── volunteer_app/        志工 App
+│   ├── elder_app/            長輩端收音機網頁版（大錄音按鈕；AWS 環境走裝置帳號自動登入）
 │   └── packages/             兩個 App 共用的 Dart packages（建立時放這）
 └── admin/                    社工 Web 後台（dashboard + Excel 匯出）
 ```

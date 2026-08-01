@@ -18,7 +18,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // 高齡照護產品：無障礙預設開啟（也讓 Web demo 可被輔助工具操作）
   SemanticsBinding.instance.ensureSemantics();
-  await JinsunSupabase.ensureInitialized();
+  // 後端由 --dart-define=BACKEND 決定（supabase 預設／aws 平行環境），見 JinsunBackends。
+  await JinsunBackends.ensureInitialized();
   // 推播（FCM+APNs）：初始化在 runApp 前；實際 token 註冊在登入後（見下方）。
   await PushService.instance.initialize();
   runApp(const FamilyApp());
@@ -27,7 +28,7 @@ Future<void> main() async {
 class FamilyApp extends StatefulWidget {
   const FamilyApp({super.key, this.backend, this.auth});
 
-  // 可注入後端／認證（測試用 MockBackend）；正式版預設 Supabase。
+  // 可注入後端／認證（測試用 MockBackend）；正式版由 JinsunBackends 依建置參數決定。
   final BackendClient? backend;
   final AuthRepository? auth;
 
@@ -45,9 +46,11 @@ class _FamilyAppState extends State<FamilyApp> {
   @override
   void initState() {
     super.initState();
-    backend = widget.backend ?? SupabaseBackend();
-    auth = widget.auth ?? SupabaseAuthRepository(role: AuthRole.family);
+    auth = widget.auth ?? JinsunBackends.createAuth(AuthRole.family);
+    backend = widget.backend ?? JinsunBackends.createBackend(auth);
     local = AppLocal(backend, auth);
+    // 推播 token 要寫進「目前這一套」後端，不能寫死 Supabase。
+    PushService.instance.backend = backend;
 
     // 推播 token 註冊：登入即註冊、登出即解除。綁定長輩清單變動時同步 topic。
     _pushAuthSub = auth.authStateChanges().listen((user) {

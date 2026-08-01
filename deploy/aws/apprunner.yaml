@@ -2,6 +2,16 @@
 # 對應 render.yaml，但跑在 AWS ECS Fargate + ALB 上。
 #
 # 這個檔案是給人讀的宣告式設定參考；實際部署由 deploy-server.sh 執行。
+#
+# 📌 檔名還叫 apprunner.yaml，但內容已經是 ECS Fargate：
+#    **App Runner 在帳號 012804034919 被 SCP 擋死**（`apprunner:ListServices` 直接拒絕，
+#    不是權限設定問題、是帳號層級政策），所以改用 ECS Fargate + ALB。
+#    見 docs/requirements/aws-handoff.md §6.3。
+#
+# ⚠️ 下面的 SUPABASE_URL 指的是**正式環境**。把這台跑起來就會多一台連正式 Supabase 的 server，
+#    且會啟動 progress.js worker → 與 Render 那台搶著對收音機播報。
+#    那時務必其中一台設 PROGRESS_WORKER=off（見 §6.2）。
+#    要的是「與正式環境完全獨立」的平行環境的話，請改用 cloud/aws/（API Gateway + Lambda + Aurora）。
 
 service:
   name: jinsun-voice-server
@@ -49,6 +59,12 @@ environment:
   MQTT_URL: "mqtts://mqttgo.io:8883"
   TRAVEL_STEPS: "20"
   TRAVEL_STEP_MS: "3000"
+  # Bedrock（社工後台可即時切換）
+  BEDROCK_GATEWAY: standard
+  AWS_REGION: us-west-2
+  # 此帳號只授權 Sonnet 4.6 與 Haiku 4.5（且必須帶 us. 前綴），見 .env.example 註解
+  BEDROCK_MODEL_ID: us.anthropic.claude-sonnet-4-6
+  BEDROCK_FAST_MODEL_ID: us.anthropic.claude-haiku-4-5-20251001-v1:0
 
 # 機密環境變數（目前直接放 env，正式環境應改用 Secrets Manager）
 secrets:

@@ -18,5 +18,8 @@
     "@supabase/supabase-js": "^2.111.0",
     "aedes": "^0.51.3",
     "mqtt": "^5.15.2"
+  },
+  "dependencies": {
+    "@aws-sdk/client-rds-data": "^3.1101.0"
   }
 }

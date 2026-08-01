@@ -5,12 +5,14 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'backend_client.dart';
+import 'event_notifications.dart';
 import 'models.dart';
+import 'row_mappers.dart';
 import 'supabase_config.dart';
 
 /// 真後端：三端共用同一份 Supabase 資料，透過 Realtime 即時同步。
 /// 實作與 MockBackend 相同的 [BackendClient] 介面，App 換後端不改 UI。
-class SupabaseBackend implements BackendClient {
+class SupabaseBackend extends BackendClient {
   SupabaseBackend({
     this.escalateAfter = const Duration(seconds: 20),
     this.dispatchWatchdog = false,
@@ -258,69 +260,27 @@ class SupabaseBackend implements BackendClient {
   }
 
   // ---- 依 DB 變化跳通知（三端一致，不管事件由誰觸發）----
+  // 文案與分級的規則在 event_notifications.dart，與 AwsBackend 共用同一份。
   void _notifyForEvent(RadioEvent e) {
-    final name = _elderName(e.elderId);
-    final eid = e.elderId;
-    switch (e.type) {
-      case RadioEventType.sos:
-        _notify('🆘 $name 按下 SOS，已派遣志工前往', Severity.emergency,
-            elderId: eid);
-      case RadioEventType.fallSuspected:
-        if (e.status == RadioEventStatus.escalated) {
-          _notify('🚨 $name 疑似跌倒且無回應，已派遣', Severity.emergency,
-              elderId: eid);
-        } else if (e.status == RadioEventStatus.open) {
-          _notify('⚠️ $name 疑似跌倒，收音機確認中…', Severity.attention,
-              elderId: eid);
-        }
-      case RadioEventType.supplyRequest:
-        _notify(
-            '🛒 $name 有物資需求${e.transcript != null ? '：${e.transcript}' : ''}',
-            Severity.normal,
-            elderId: eid);
-    }
+    final n = notificationForEvent(e, _elderName(e.elderId));
+    if (n != null) _notify(n.message, n.severity, elderId: e.elderId);
   }
 
   void _notifyForNewTask(DispatchTask t) {
-    final name = _elderName(t.elderId);
-    if (t.kind == DispatchKind.emergency) {
-      _notify('📋 新緊急派遣單：$name，待志工接單', Severity.emergency,
-          elderId: t.elderId);
-    } else {
-      _notify('📋 新物資派遣單：$name${t.items.isEmpty ? '' : '（${t.items.join('、')}）'}',
-          Severity.attention, elderId: t.elderId);
-    }
+    final n = notificationForNewTask(t, _elderName(t.elderId));
+    _notify(n.message, n.severity, elderId: t.elderId);
   }
 
   void _notifyForTaskTransition(DispatchTask t) {
-    final name = _elderName(t.elderId);
-    final who = t.assigneeName ?? '志工';
-    switch (t.status) {
-      case DispatchStatus.accepted:
-        _notify(
-            '🏃 $who 已接單${t.etaMinutes != null ? '，預計 ${t.etaMinutes} 分鐘到 $name 家' : '，前往 $name 家'}',
-            Severity.attention,
-            elderId: t.elderId);
-      case DispatchStatus.arrived:
-        _notify('📍 $who 已抵達 $name 家', Severity.attention, elderId: t.elderId);
-      case DispatchStatus.resolved:
-        _notify('✅ $name 的任務已完成', Severity.normal, elderId: t.elderId);
-      case DispatchStatus.pending:
-        break;
-    }
+    final n = notificationForTaskTransition(t, _elderName(t.elderId));
+    if (n != null) _notify(n.message, n.severity, elderId: t.elderId);
   }
 
   Future<void> _loadWorkers() async {
     final rows = await _sb.from('social_workers').select().order('id');
     _workers
       ..clear()
-      ..addAll(rows.map((r) => SocialWorker(
-            id: r['id'] as String,
-            name: r['name'] as String,
-            phone: (r['phone'] ?? '') as String,
-            shiftStartHour: (r['shift_start_hour'] as num).toInt(),
-            shiftEndHour: (r['shift_end_hour'] as num).toInt(),
-          )));
+      ..addAll(rows.map(workerFromRow));
   }
 
   @override
@@ -364,42 +324,16 @@ class SupabaseBackend implements BackendClient {
       final certRows = await _sb.from('volunteer_certificates').select();
       for (final c in certRows) {
         final vid = (c['volunteer_id'] ?? '') as String;
-        (certsByVol[vid] ??= []).add(VolunteerCertificate(
-          kind: CertKindLabel.fromWire((c['kind'] ?? '') as String),
-          status: CertStatusLabel.fromWire(c['status'] as String?),
-          issuedAt: DateTime.tryParse((c['issued_at'] ?? '') as String),
-          expiresAt: DateTime.tryParse((c['expires_at'] ?? '') as String),
-          note: c['note'] as String?,
-        ));
+        (certsByVol[vid] ??= []).add(certificateFromRow(c));
       }
     } catch (_) {
       // 表不存在時（尚未套用新 schema）不擋 App，證件顯示為空。
     }
     _volunteers
       ..clear()
-      ..addAll(rows.map((r) => Volunteer(
-            id: r['id'] as String,
-            name: r['name'] as String,
-            phone: (r['phone'] ?? '') as String,
-            lat: ((r['lat'] ?? 0) as num).toDouble(),
-            lng: ((r['lng'] ?? 0) as num).toDouble(),
-            online: (r['online'] ?? true) as bool,
-            points: ((r['points'] ?? 0) as num).toInt(),
-            intro: (r['intro'] ?? '') as String,
-            serviceHours: _parseServiceHours(r['service_hours']),
-            certificates: certsByVol[r['id']] ?? const [],
-            locationUpdatedAt:
-                DateTime.tryParse((r['location_updated_at'] ?? '') as String),
-          )));
+      ..addAll(rows.map((r) =>
+          volunteerFromRow(r, certificates: certsByVol[r['id']] ?? const [])));
     _volCtrl.add(currentVolunteers);
-  }
-
-  List<ServiceHourSlot> _parseServiceHours(dynamic raw) {
-    if (raw is! List) return const [];
-    return raw
-        .whereType<Map>()
-        .map((m) => ServiceHourSlot.fromJson(Map<String, dynamic>.from(m)))
-        .toList();
   }
 
   Future<void> _loadMessages() async {
@@ -414,18 +348,7 @@ class SupabaseBackend implements BackendClient {
     _msgCtrl.add(currentMessages);
   }
 
-  TaskMessage _messageFrom(Map<String, dynamic> r) => TaskMessage(
-        id: r['id'] as String,
-        taskId: (r['task_id'] ?? '') as String,
-        fromRole: switch (r['from_role'] as String) {
-          'family' => ChatFromRole.family,
-          'volunteer' => ChatFromRole.volunteer,
-          _ => ChatFromRole.system,
-        },
-        senderId: r['sender_id'] as String?,
-        text: (r['text'] ?? '') as String,
-        createdAt: DateTime.parse(r['created_at'] as String),
-      );
+  TaskMessage _messageFrom(Map<String, dynamic> r) => messageFromRow(r);
 
   @override
   Future<void> sendTaskMessage(String taskId,
@@ -435,7 +358,7 @@ class SupabaseBackend implements BackendClient {
     final row = await _sb.from('task_messages').insert({
       'task_id': taskId,
       'from_role': from.name,
-      if (senderId != null) 'sender_id': senderId,
+      'sender_id': ?senderId,
       'text': t,
     }).select().single();
     // 送出者本端樂觀顯示 + 廣播給對方（次秒級）；Postgres Changes 之後再校準。
@@ -453,8 +376,8 @@ class SupabaseBackend implements BackendClient {
     final res = await _sb.functions.invoke('whisper', body: {
       'audio_base64': base64Encode(audioBytes),
       'filename': filename,
-      if (mimeType != null) 'mime': mimeType,
-      if (prompt != null) 'prompt': prompt,
+      'mime': ?mimeType,
+      'prompt': ?prompt,
       'language': 'zh',
     });
     final data = res.data;
@@ -1003,6 +926,81 @@ class SupabaseBackend implements BackendClient {
     return _sb.storage.from('proofs').getPublicUrl(path);
   }
 
+  // ---------- 綁定／設定／推播 token ----------
+  // 這幾件事以前散在各 App 裡直接打 Supabase（family_app/app_local.dart、
+  // admin/hardware_sim.dart、push_service.dart）。收進 BackendClient 之後，
+  // 三端才真的只依賴介面，換 AWS 後端不必逐頁改。
+
+  @override
+  Future<Set<String>> familyBindings(String familyId) async {
+    try {
+      final rows = await _sb
+          .from('family_bindings')
+          .select('elder_id')
+          .eq('family_id', familyId);
+      return {for (final r in rows) r['elder_id'] as String};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  @override
+  Future<void> bindFamily(String familyId, String elderId) async {
+    try {
+      await _sb.from('family_bindings').upsert(
+        {'family_id': familyId, 'elder_id': elderId},
+        onConflict: 'family_id,elder_id',
+      );
+    } catch (_) {
+      // 已綁定或離線時不擋流程（呼叫端會把 elderId 記進本地）
+    }
+  }
+
+  @override
+  Future<String?> appSetting(String key) async {
+    try {
+      final row = await _sb
+          .from('app_settings')
+          .select('value')
+          .eq('key', key)
+          .maybeSingle();
+      return row?['value'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> setAppSetting(String key, String value) async {
+    await _sb.from('app_settings').upsert({
+      'key': key,
+      'value': value,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  @override
+  Future<void> registerDeviceToken({
+    required String token,
+    required String role,
+    String? platform,
+    List<String> elderIds = const [],
+  }) async {
+    await _sb.from('device_tokens').upsert({
+      'token': token,
+      'user_id': _sb.auth.currentUser?.id,
+      'role': role,
+      'platform': ?platform,
+      'elder_ids': elderIds,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'token');
+  }
+
+  @override
+  Future<void> unregisterDeviceToken(String token) async {
+    await _sb.from('device_tokens').delete().eq('token', token);
+  }
+
   @override
   void dispose() {
     for (final t in _timers.values) {
@@ -1038,23 +1036,7 @@ class SupabaseBackend implements BackendClient {
     return '長輩';
   }
 
-  Severity _sev(String s) => switch (s) {
-        'emergency' => Severity.emergency,
-        'attention' => Severity.attention,
-        _ => Severity.normal,
-      };
-
-  CallSignal _callFrom(Map<String, dynamic> r) => CallSignal(
-        id: r['id'].toString(),
-        taskId: (r['task_id'] ?? '') as String,
-        room: (r['room'] ?? '') as String,
-        from: CallRoleWire.parse((r['from_role'] ?? 'family') as String),
-        to: CallRoleWire.parse((r['to_role'] ?? 'volunteer') as String),
-        status: CallStatusWire.parse((r['status'] ?? 'ended') as String),
-        fromName: r['from_name'] as String?,
-        createdAt:
-            DateTime.tryParse((r['created_at'] ?? '') as String) ?? DateTime.now(),
-      );
+  CallSignal _callFrom(Map<String, dynamic> r) => callFromRow(r);
 
   @override
   Future<CallSignal> startCall({
@@ -1075,7 +1057,7 @@ class SupabaseBackend implements BackendClient {
           'from_role': from.wire,
           'to_role': to.wire,
           'status': 'ringing',
-          if (fromName != null) 'from_name': fromName,
+          'from_name': ?fromName,
         })
         .select()
         .single();
@@ -1106,77 +1088,8 @@ class SupabaseBackend implements BackendClient {
     return row == null ? null : _callFrom(row);
   }
 
-  Elder _elderFrom(Map<String, dynamic> r) => Elder(
-        id: r['id'] as String,
-        name: r['name'] as String,
-        age: ((r['age'] ?? 0) as num).toInt(),
-        address: (r['address'] ?? '') as String,
-        phone: r['phone'] as String?,
-        lat: ((r['lat'] ?? 0) as num).toDouble(),
-        lng: ((r['lng'] ?? 0) as num).toDouble(),
-        severity: _sev(r['severity'] as String),
-        preferredLang: (r['preferred_lang'] == 'taigi')
-            ? ElderLang.taigi
-            : ElderLang.mandarin,
-        deviceSerial: r['device_serial'] as String?,
-        lastActivityAt:
-            DateTime.tryParse((r['last_activity_at'] ?? '') as String) ??
-                DateTime.now(),
-        note: r['note'] as String?,
-        supervisorWorkerName: r['supervisor_worker_name'] as String?,
-        supervisorVolunteerName: r['supervisor_volunteer_name'] as String?,
-      );
-
-  RadioEvent _eventFrom(Map<String, dynamic> r) => RadioEvent(
-        id: r['id'] as String,
-        elderId: (r['elder_id'] ?? '') as String,
-        type: switch (r['type'] as String) {
-          'sos' => RadioEventType.sos,
-          'supply_request' => RadioEventType.supplyRequest,
-          _ => RadioEventType.fallSuspected,
-        },
-        status: switch (r['status'] as String) {
-          'confirmed_ok' => RadioEventStatus.confirmedOk,
-          'escalated' => RadioEventStatus.escalated,
-          'closed' => RadioEventStatus.closed,
-          _ => RadioEventStatus.open,
-        },
-        severity: _sev(r['severity'] as String),
-        // Supabase 存 UTC；轉本地時區顯示（台灣 +8），否則時間會差 8 小時。
-        occurredAt: DateTime.parse(r['occurred_at'] as String).toLocal(),
-        transcript: r['transcript'] as String?,
-      );
-
-  DispatchTask _taskFrom(Map<String, dynamic> r) => DispatchTask(
-        id: r['id'] as String,
-        elderId: (r['elder_id'] ?? '') as String,
-        eventId: (r['event_id'] ?? '') as String,
-        kind: switch (r['kind'] as String) {
-          'supply' => DispatchKind.supply,
-          'follow_up' => DispatchKind.followUp,
-          _ => DispatchKind.emergency,
-        },
-        status: switch (r['status'] as String) {
-          'accepted' => DispatchStatus.accepted,
-          'arrived' => DispatchStatus.arrived,
-          'resolved' => DispatchStatus.resolved,
-          _ => DispatchStatus.pending,
-        },
-        assigneeName: r['assignee_name'] as String?,
-        workerName: r['worker_name'] as String?,
-        etaMinutes: (r['eta_minutes'] as num?)?.toInt(),
-        items: ((r['items'] ?? const []) as List).cast<String>(),
-        note: r['note'] as String?,
-        outcome: r['outcome'] as String?,
-        proofPhotoUrl: r['proof_photo_url'] as String?,
-        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
-        acceptedAt:
-            DateTime.tryParse((r['accepted_at'] ?? '') as String)?.toLocal(),
-        arrivedAt:
-            DateTime.tryParse((r['arrived_at'] ?? '') as String)?.toLocal(),
-        resolvedAt:
-            DateTime.tryParse((r['resolved_at'] ?? '') as String)?.toLocal(),
-        offeredUntil:
-            DateTime.tryParse((r['offered_until'] ?? '') as String)?.toLocal(),
-      );
+  // 解析一律走 row_mappers.dart（與 AwsBackend 共用同一份，欄位改動不會只改到一邊）
+  Elder _elderFrom(Map<String, dynamic> r) => elderFromRow(r);
+  RadioEvent _eventFrom(Map<String, dynamic> r) => eventFromRow(r);
+  DispatchTask _taskFrom(Map<String, dynamic> r) => taskFromRow(r);
 }

@@ -10,11 +10,38 @@
 #include <MAX98357.h>
 #include <PubSubClient.h>
 
-char ssid[] = "xxx";    // your network SSID (name)
-char pass[] = "xxx";        // your network password
+// ===== 機密設定（不進版控）=====
+// 把 secrets.h.example 複製成 secrets.h（同資料夾，已在 .gitignore）並填入實際值。
+// 沒有這個檔也編得過，但用的是下面的佔位符 → 連不上網、AWS IoT 也不會連。
+#if defined(__has_include)
+#  if __has_include("secrets.h")
+#    include "secrets.h"
+#  endif
+#endif
+#ifndef SECRET_WIFI_SSID
+#define SECRET_WIFI_SSID "xxx"
+#endif
+#ifndef SECRET_WIFI_PASS
+#define SECRET_WIFI_PASS "xxx"
+#endif
+#ifndef SECRET_ASR_API_KEY
+#define SECRET_ASR_API_KEY "sk-bf-"
+#endif
+
+// ===== 後端環境切換（改這一行就好）=====
+// 0 = 正式環境：Render voice server + mqttgo.io + Supabase
+// 1 = AWS 平行環境：API Gateway + Lambda + Step Functions + IoT Core + Aurora
+//
+// ⚠️ 兩套環境**不共用資料庫**：切過去之後這台裝置的事件只會出現在 AWS 那三端網址上，
+//    正式環境的家屬 App 看不到（反之亦然）。交接說明見 docs/requirements/aws-handoff.md。
+// 契約（topic、payload、QoS、LWT、/voice 的請求與回應）兩邊完全相同，只有端點與憑證不同。
+#define BACKEND_AWS 1
+
+char ssid[] = SECRET_WIFI_SSID;    // your network SSID (name)
+char pass[] = SECRET_WIFI_PASS;    // your network password
 int status = WL_IDLE_STATUS;
 
-String api_key = "sk-bf-";                         // Groq - > https://console.groq.com/keys
+String api_key = SECRET_ASR_API_KEY;               // Groq - > https://console.groq.com/keys
 char api_server[] = "llm-gateway.xcc.tw";             // Groq - > api.groq.com
 String api_path = "/v1/audio/transcriptions";     // Groq - > /openai/v1/audio/transcriptions
 String model = "paulpengtw/faster-whisper-Breeze-ASR-26";                       // Groq - > whisper-large-v3-turbo or whisper-large-v3
@@ -34,29 +61,81 @@ String tts_path = "/nutntweng/tts/aten/";
 // 「大腦」在雲端(意圖分類、問診、20 秒升級計時、派遣志工),裝置只負責
 // 收音、上報事件、發聲。原本直連 Gemini 的做法已換成這條,長輩的話才進得了
 // 急救狀態機——直連 LLM 時雲端根本不知道有人在求救。
+#if BACKEND_AWS
+// AWS:API Gateway($default 路由 → jinsun-voice Lambda)。契約與 Render 那台逐欄位相同。
+char voice_server[] = "yr0ep335el.execute-api.us-west-2.amazonaws.com";
+// Lambda 冷啟動約 2–5 秒;API Gateway 的整合逾時上限本來就是 30 秒,等更久沒有意義。
+const unsigned long voice_timeout_ms = 30000;
+#else
 char voice_server[] = "jinsun-voice-server-mg1f.onrender.com";
+// Render 免費方案閒置會休眠,冷啟動可能 30–60 秒才回應
+const unsigned long voice_timeout_ms = 60000;
+#endif
 String voice_path = "/voice";
 // device_serial 全程固定,同時是 MQTT client id 與 topic 的一部分。
 // 正式版由 BLE 配網寫入;現在先硬編碼(JS-0001 是資料庫既有種子,可直接對測)。
+//
+// ⚠️ 走 AWS 時這個字串有第三個身分:IoT **Thing 名稱**。IoT Policy 用
+//    ${iot:Connection.Thing.ThingName} 限縮 client id 與 topic(cloud/aws/iot/device-policy.json),
+//    所以 device_serial ≠ Thing 名稱 → 連線直接被切斷,而且不會有任何錯誤訊息。
+//    AWS 上已建好的 Thing 是 JS-0001 與 JS-REAL-0001,燒進去的憑證要 attach 到同一個。
 String device_serial = "JS-0001";
-// Render 免費方案閒置會休眠,冷啟動可能 30–60 秒才回應
-const unsigned long voice_timeout_ms = 60000;
 
 // ===== MQTT 下行(server publish → 裝置) =====
 // 契約見 §3②:訂閱 jinsun/{serial}/cmd(QoS 1)、keep-alive 30s、
 // 斷線指數退避重連(1s→2s→…→30s)、LWT jinsun/{serial}/status = "offline"。
 // 為什麼要外部 broker:Render 這類 PaaS 只對外開 443,server 內嵌的 aedes(1883)
 // 從公網進不來 → server 與裝置各自連上同一顆公共 broker 會合(契約完全不變)。
+// AWS 這邊則是 IoT Core 當 broker,jinsun-speak Lambda 負責 publish;順帶補掉
+// 「公共 broker 無認證、任何人都能對 jinsun/# 發指令」這個資安洞。
+#if BACKEND_AWS
+// AWS IoT Core 的 ATS endpoint(`aws iot describe-endpoint --endpoint-type iot:Data-ATS`)。
+// 8883 = X.509 雙向 TLS。不要改成 443——443 要求 ALPN `x-amzn-mqtt-ca`,這個核心送不出去。
+char mqtt_server[] = "a2zyk2buv4tih2-ats.iot.us-west-2.amazonaws.com";
+#else
 char mqtt_server[] = "mqttgo.io";
+#endif
 const int mqtt_port = 8883;    // 一律走 TLS:實測此核心純 TCP(WiFiClient)收不到任何資料
+// AWS IoT 允許的 keep-alive 是 30–1200 秒,30 剛好是下限(送 1–29 會被拉到 30)。
 const int mqtt_keepalive = 30;
+// topic 兩套環境完全相同,jinsun-speak Lambda publish 的也是這一條。
 String cmd_topic = "jinsun/" + device_serial + "/cmd";
 String status_topic = "jinsun/" + device_serial + "/status";
+
+// ===== 裝置憑證(只有 AWS IoT 需要:X.509 雙向 TLS)=====
+// 用下列指令重簽一組並掛上 policy 與 thing(私鑰無法從 AWS 取回,遺失就重簽)。
+// 指令刻意包在 block 註解裡:shell 的行尾 \ 在 // 註解中會把下一行一起接進註解
+// (-Wcomment),改回 // 會警告,而且哪天最後一行下面擺了程式碼就會被吃掉。
+/*
+  aws iot create-keys-and-certificate --set-as-active \
+    --certificate-pem-outfile device.cert.pem --private-key-outfile device.key.pem \
+    --public-key-outfile device.public.pem --query certificateArn --output text > cert.arn
+  aws iot attach-policy --policy-name JinsunDevicePolicy --target "$(cat cert.arn)"
+  aws iot attach-thing-principal --thing-name JS-0001 --principal "$(cat cert.arn)"
+*/
+// 兩個檔案的內容貼進 secrets.h(見 secrets.h.example)。**憑證與私鑰絕對不要進 git。**
+#ifndef SECRET_AWS_DEVICE_CERT
+#define SECRET_AWS_DEVICE_CERT "PASTE device.cert.pem HERE (see secrets.h.example)\n"
+#endif
+#ifndef SECRET_AWS_DEVICE_KEY
+#define SECRET_AWS_DEVICE_KEY "PASTE device.key.pem HERE (see secrets.h.example)\n"
+#endif
+char* device_cert_pem = (char*)SECRET_AWS_DEVICE_CERT;
+char* device_key_pem = (char*)SECRET_AWS_DEVICE_KEY;
+
+// 憑證還是佔位符時要**在連線前就擋下來並講清楚**:AWS IoT 對認證/授權失敗的反應是
+// 直接切斷 TCP,不會回 CONNACK 錯誤碼,PubSubClient 只會回 rc=-2,症狀長得跟
+// 「網路不穩」一模一樣(aws-handoff.md §5),照著查會查錯方向。
+bool deviceCertReady()
+{
+    return strncmp(device_cert_pem, "-----BEGIN ", 11) == 0
+           && strstr(device_key_pem, "-----BEGIN ") != NULL;
+}
 
 // mqttgo.io 憑證由 Let's Encrypt 簽發,鏈根為 ISRG Root X1(下面這張)。
 // ⚠️ Let's Encrypt 是 90 天短效憑證,而本板無 RTC/NTP、開機硬設時鐘(見 setup()):
 //    重燒韌體時務必把 tv.tv_sec 更新到接近當天,否則會被判「憑證尚未生效」而連不上。
-char* mqtt_root_ca =
+char* isrg_root_x1 =
     "-----BEGIN CERTIFICATE-----\n"
     "MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\n"
     "TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n"
@@ -88,6 +167,38 @@ char* mqtt_root_ca =
     "mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d\n"
     "emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n"
     "-----END CERTIFICATE-----\n";
+
+// AWS IoT 的 ATS endpoint 由 Amazon Root CA 1 簽發(有效期到 2038,不像 Let's Encrypt 會
+// 每 90 天換一次;但下面設系統時間那段還是不能省——時鐘落在**裝置憑證**的
+// notBefore 之前一樣會驗不過,而裝置憑證是「重簽當天」才生效的)。
+// 來源:https://www.amazontrust.com/repository/AmazonRootCA1.pem
+char* amazon_root_ca1 =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF\n"
+    "ADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6\n"
+    "b24gUm9vdCBDQSAxMB4XDTE1MDUyNjAwMDAwMFoXDTM4MDExNzAwMDAwMFowOTEL\n"
+    "MAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEZMBcGA1UEAxMQQW1hem9uIFJv\n"
+    "b3QgQ0EgMTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALJ4gHHKeNXj\n"
+    "ca9HgFB0fW7Y14h29Jlo91ghYPl0hAEvrAIthtOgQ3pOsqTQNroBvo3bSMgHFzZM\n"
+    "9O6II8c+6zf1tRn4SWiw3te5djgdYZ6k/oI2peVKVuRF4fn9tBb6dNqcmzU5L/qw\n"
+    "IFAGbHrQgLKm+a/sRxmPUDgH3KKHOVj4utWp+UhnMJbulHheb4mjUcAwhmahRWa6\n"
+    "VOujw5H5SNz/0egwLX0tdHA114gk957EWW67c4cX8jJGKLhD+rcdqsq08p8kDi1L\n"
+    "93FcXmn/6pUCyziKrlA4b9v7LWIbxcceVOF34GfID5yHI9Y/QCB/IIDEgEw+OyQm\n"
+    "jgSubJrIqg0CAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMC\n"
+    "AYYwHQYDVR0OBBYEFIQYzIU07LwMlJQuCFmcx7IQTgoIMA0GCSqGSIb3DQEBCwUA\n"
+    "A4IBAQCY8jdaQZChGsV2USggNiMOruYou6r4lK5IpDB/G/wkjUu0yKGX9rbxenDI\n"
+    "U5PMCCjjmCXPI6T53iHTfIUJrU6adTrCC2qJeHZERxhlbI1Bjjt/msv0tadQ1wUs\n"
+    "N+gDS63pYaACbvXy8MWy7Vu33PqUXHeeE6V/Uq2V8viTO96LXFvKWlJbYK8U90vv\n"
+    "o/ufQJVtMVT8QtPHRh8jrdkPSHCa2XV4cdFyQzR1bldZwgJcJmApzyMZFo6IQ6XU\n"
+    "5MsI+yMRQ+hDKXJioaldXgjUkK642M4UwtBV8ob2xJNDd2ZhwLnoQdeXeGADbkpy\n"
+    "rqXRfboQnoZsG4q5WTP468SQvvG5\n"
+    "-----END CERTIFICATE-----\n";
+
+#if BACKEND_AWS
+char* mqtt_root_ca = amazon_root_ca1;
+#else
+char* mqtt_root_ca = isrg_root_x1;
+#endif
 
 // D12 被 I2S 的 LRC 佔用、D13 是閃光燈 PWM(恆為 LOW),按鈕用 D9。
 // 按鈕接 D9 與 GND,用 INPUT_PULLUP(按下 = LOW)。
@@ -187,13 +298,16 @@ void setup()
     // ⚠️ 這個值必須接近「燒錄當天」,不能只是「某個 2026 年的日期」:
     //    mqttgo.io 用 Let's Encrypt 的 90 天短效憑證,設得太早會被判
     //    「憑證尚未生效」(notBefore 在未來)而連不上 MQTT。
-    //    1785078232 = 2026-07-26。重燒韌體時請更新成當天的 epoch:
+    //    走 AWS 更要注意:根憑證雖然到 2038,但**裝置憑證是重簽的那一刻才生效**——
+    //    這個值只要早於憑證的 notBefore,握手就會失敗,而 IoT Core 的反應是直接斷線、
+    //    不給任何理由。**重簽 IoT 憑證之後一定要連這行一起更新**(否則新憑證反而連不上)。
+    //    1785573600 = 2026-08-01 16:40 (台北)。重燒韌體時請更新成當天的 epoch:
     //    macOS/Linux 用 `date +%s` 取得。
     struct timeval tv;
-    tv.tv_sec = 1785078232;
+    tv.tv_sec = 1785573600;
     tv.tv_usec = 0;
     settimeofday(&tv, NULL);
-    Serial.println("System time forcibly set to 2026-07-26 to pass SSL verification!");
+    Serial.println("System time forcibly set to 2026-08-01 to pass SSL verification!");
 
     // list files under root directory
     bool sdOK = fs.begin();
@@ -214,9 +328,23 @@ void setup()
     amp.setShutdownPin(10);
     amp.setVolume(ampVolume);
 
+    // 開機先把「這台現在講的是哪一套雲」印出來。兩套環境資料庫不共通,
+    // 事件沒出現在家屬 App 時第一個要確認的就是這行(而不是去查網路)。
+#if BACKEND_AWS
+    Serial.println("[ENV] AWS 平行環境 | " + String(voice_server) + voice_path
+                   + " | MQTT " + String(mqtt_server) + ":" + String(mqtt_port) + " (X.509)");
+#else
+    Serial.println("[ENV] 正式環境(Render/Supabase) | " + String(voice_server) + voice_path
+                   + " | MQTT " + String(mqtt_server) + ":" + String(mqtt_port));
+#endif
+
     // MQTT 下行:設定好參數,實際連線交給 loop() 的 mqttPump()(帶退避重連),
     // 這樣即使開機時 broker 連不上也不會卡住開機流程。
     mqttNet.setRootCA((unsigned char*)mqtt_root_ca);
+#if BACKEND_AWS
+    // AWS IoT 是雙向 TLS:除了驗伺服器,還要拿裝置自己的憑證/私鑰去證明身分。
+    mqttNet.setClientCertificate((unsigned char*)device_cert_pem, (unsigned char*)device_key_pem);
+#endif
     mqtt.setServer(mqtt_server, mqtt_port);
     mqtt.setKeepAlive(mqtt_keepalive);
     mqtt.setCallback(onMqttMessage);
@@ -441,6 +569,20 @@ void mqttPump()
         return;    // 還沒到下次重試時間
     }
 
+#if BACKEND_AWS
+    // 沒憑證就別浪費一次 TLS 握手,直接講清楚原因(否則只會看到 rc=-2 一路重試)。
+    if (!deviceCertReady()) {
+        static bool warned = false;
+        if (!warned) {
+            Serial.println("[MQTT] ✗ 缺少 AWS IoT 裝置憑證:請把 device.cert.pem / device.key.pem "
+                           "填進 secrets.h(見 secrets.h.example)。下行指令目前完全收不到。");
+            warned = true;
+        }
+        mqttNextAttempt = millis() + mqttBackoffMax;
+        return;
+    }
+#endif
+
     Serial.println("[MQTT] 連線中 " + String(mqtt_server) + ":" + String(mqtt_port) + " …");
     // LWT:broker 偵測到本機斷線時,自動幫我們發 offline
     // (後台「裝置離線」顯示免費取得,不用另外做心跳)
@@ -449,6 +591,10 @@ void mqttPump()
     //    7 參數的多載把 cleanSession 寫死成 true,broker 會在斷線時丟掉 session,
     //    QoS 1 的「斷線期間補投」就完全不會發生——急救逾時階梯的指令只要遇上
     //    一次短暫斷線就永遠消失。這台是急救裝置,漏一則升級指令的代價是人命。
+    //    (AWS IoT 也支援 persistent session,但只保留 1 小時;mqttgo.io 則看 broker 設定。
+    //     兩邊都夠涵蓋「ASR 阻塞那幾十秒」這種短暫斷線。)
+    //
+    // AWS IoT 用 X.509 認身分,username/password 一律忽略,所以這裡兩個 NULL 兩套通用。
     bool ok = mqtt.connect(
         device_serial.c_str(), NULL, NULL, status_topic.c_str(), 1, false, "offline", false);
     if (ok) {

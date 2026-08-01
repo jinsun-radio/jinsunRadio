@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'backend_client.dart';
 import 'models.dart';
 
-class MockBackend implements BackendClient {
+class MockBackend extends BackendClient {
   MockBackend({
     this.autoVolunteer = false,
     this.autoVolunteerName = '阿明',
@@ -33,6 +33,27 @@ class MockBackend implements BackendClient {
 
   /// 每位長輩近期「疑似跌倒（回應OK）」的時間戳，用來判定趨勢。
   final Map<String, List<DateTime>> _fallTrend = {};
+
+  /// 家屬綁定（記憶體版，離線 demo 用）。真後端的版本在 SupabaseBackend／AwsBackend。
+  final Map<String, Set<String>> _bindings = {};
+  final Map<String, String> _settings = {};
+
+  @override
+  Future<Set<String>> familyBindings(String familyId) async =>
+      Set.unmodifiable(_bindings[familyId] ?? const <String>{});
+
+  @override
+  Future<void> bindFamily(String familyId, String elderId) async {
+    (_bindings[familyId] ??= <String>{}).add(elderId);
+  }
+
+  @override
+  Future<String?> appSetting(String key) async => _settings[key];
+
+  @override
+  Future<void> setAppSetting(String key, String value) async {
+    _settings[key] = value;
+  }
 
   final List<Elder> _elders = [];
   final List<RadioEvent> _events = [];

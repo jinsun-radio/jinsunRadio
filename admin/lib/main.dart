@@ -11,7 +11,8 @@ import 'logo.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await JinsunSupabase.ensureInitialized();
+  // 後端由 --dart-define=BACKEND 決定（supabase 預設／aws 平行環境），見 JinsunBackends。
+  await JinsunBackends.ensureInitialized();
   runApp(const AdminApp());
 }
 
@@ -228,7 +229,7 @@ class _GradientCta extends StatelessWidget {
 class AdminApp extends StatefulWidget {
   const AdminApp({super.key, this.backend, this.auth});
 
-  // 可注入後端／認證（測試用 MockBackend）；正式版預設 Supabase。
+  // 可注入後端／認證（測試用 MockBackend）；正式版由 JinsunBackends 依建置參數決定。
   final BackendClient? backend;
   final AuthRepository? auth;
 
@@ -244,8 +245,9 @@ class _AdminAppState extends State<AdminApp> {
   void initState() {
     super.initState();
     // 後台＝派遣中心：開啟卡單自動改派看門狗（單一權威端執行）。
-    backend = widget.backend ?? SupabaseBackend(dispatchWatchdog: true);
-    auth = widget.auth ?? SupabaseAuthRepository(role: AuthRole.worker);
+    auth = widget.auth ?? JinsunBackends.createAuth(AuthRole.worker);
+    backend = widget.backend ??
+        JinsunBackends.createBackend(auth, dispatchWatchdog: true);
     auth.restore().then((_) async {
       final demo = Uri.base.queryParameters['demo'];
       if (demo != null && auth.currentUser == null) {

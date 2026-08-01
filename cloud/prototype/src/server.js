@@ -46,7 +46,7 @@ const orch = createOrchestrator({
 // 進度播報 worker：志工接單／接近（GPS ≤250m）／抵達 → 收音機主動念（走同一個扇出下行）。
 const progress = createProgressWorker({ downlink });
 
-// 志工移動模擬（demo）：接單後把志工座標沿路內插寫回 Supabase → 家屬地圖像 Uber 一樣看移動。
+// 志工移動模擬（demo）：接單後把志工座標沿路內插寫回資料庫 → 家屬地圖像 Uber 一樣看移動。
 const travel = createTravelSimulator({});
 
 // 硬體按鍵／相機事件 → 對應觸發語句（走同一條 orchestrator 管線）
