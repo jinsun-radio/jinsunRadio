@@ -31,7 +31,7 @@
 #define SECRET_WIFI_PASS "xxx"
 #endif
 #ifndef SECRET_ASR_API_KEY
-#define SECRET_ASR_API_KEY "sk-bf-"
+#define SECRET_ASR_API_KEY "sk-jinsun-"    // 佔位符;實際值放 secrets.h(見下方 ASR 區塊)
 #endif
 
 // ===== 後端環境切換（改這一行就好）=====
@@ -47,10 +47,35 @@ char ssid[] = SECRET_WIFI_SSID;    // your network SSID (name)
 char pass[] = SECRET_WIFI_PASS;    // your network password
 int status = WL_IDLE_STATUS;
 
-String api_key = SECRET_ASR_API_KEY;               // Groq - > https://console.groq.com/keys
-char api_server[] = "llm-gateway.xcc.tw";             // Groq - > api.groq.com
-String api_path = "/v1/audio/transcriptions";     // Groq - > /openai/v1/audio/transcriptions
-String model = "paulpengtw/faster-whisper-Breeze-ASR-26";                       // Groq - > whisper-large-v3-turbo or whisper-large-v3
+// ===== ASR(語音轉文字)=====
+// 現用:自家的 SageMaker endpoint `breeze-asr-26`(faster-whisper Breeze-ASR-26 fp16),
+// 由 jinsun-asr-openai Lambda 開成 OpenAI 相容的 /v1/audio/transcriptions。
+// 部署:bash cloud/aws/scripts/deploy-asr-openai.sh
+//
+// 換過來的好處:不再依賴外部 gateway(XCC 那顆是別人的服務、金鑰也是別人發的),
+// 模型權重與 endpoint 都在自己帳號裡。
+//
+// 刻意**不用 #if BACKEND_AWS 包起來**,理由與下方國語 TTS 完全相同:
+// 這是無狀態的服務呼叫、沒有資料落地,不違反「兩套環境不共用資料庫」。
+//
+// ⚠️ 認證標頭不用改:那支 Lambda 同時吃 `x-bf-vk` 與 `Authorization: Bearer`,
+//    刻意與 XCC Gateway 對齊,所以下面組請求的程式碼一行都不用動。
+// ⚠️ 金鑰換人發了:AWS 這條是 `sk-jinsun-…`(deploy-asr-openai.sh 產生並印出),
+//    不是 XCC 的 `sk-bf-…`。secrets.h 的 SECRET_ASR_API_KEY 要一起換。
+// ⚠️ 音檔上限 4.5MB、單次請求上限 30 秒(API Gateway 整合逾時硬上限)。
+//    板子最長錄 30 秒 ≈ 1MB,在範圍內。
+String api_key = SECRET_ASR_API_KEY;
+char api_server[] = "yr0ep335el.execute-api.us-west-2.amazonaws.com";
+String api_path = "/v1/audio/transcriptions";
+String model = "breeze-asr-26";
+
+// —— 舊的 XCC Gateway(保留備援)——
+// SageMaker endpoint 是 GPU 機型、會被 teardown 收掉;真的收掉時把上面四行註解、
+// 改用下面四行即可切回去(路徑與標頭都相同,只有 host / model / 金鑰不同)。
+// String api_key = SECRET_ASR_API_KEY;               // Groq - > https://console.groq.com/keys
+// char api_server[] = "llm-gateway.xcc.tw";             // Groq - > api.groq.com
+// String api_path = "/v1/audio/transcriptions";     // Groq - > /openai/v1/audio/transcriptions
+// String model = "paulpengtw/faster-whisper-Breeze-ASR-26";                       // Groq - > whisper-large-v3-turbo or whisper-large-v3
 
 #define FILENAME "test"
 String FILENAME_EXT = String(FILENAME)+".mp4";
@@ -68,8 +93,8 @@ String tts_path = "/nutntweng/tts/aten/";
 // 部署:bash cloud/aws/scripts/deploy-tts.sh
 //
 // 刻意**不用 #if BACKEND_AWS 包起來**:TTS 是無狀態的服務呼叫、沒有資料落地,
-// 不違反「兩套環境不共用資料庫」—— ASR 那顆 gateway(llm-gateway.xcc.tw)本來
-// 也是兩邊共用的。這樣 Render 環境同樣念得出國語。
+// 不違反「兩套環境不共用資料庫」——上面的 ASR 也是同一個判斷。
+// 這樣 Render 環境同樣念得出國語。
 char tts_mandarin_server[] = "yr0ep335el.execute-api.us-west-2.amazonaws.com";
 String tts_mandarin_path = "/tts";
 
@@ -1265,10 +1290,11 @@ String sendAudioTpWhisper() {
       client_tcp.println("POST "+api_path+" HTTP/1.1");
       client_tcp.println("Connection: close");   // 一次性請求，讓伺服器回完就關，板子讀到關閉為止
       client_tcp.println("Host: " + String(api_server));
-      // ⚠️ XCC Gateway 認的是 x-bf-vk 標頭,不是 OpenAI 慣用的 Authorization: Bearer。
-      //    送錯標頭時 gateway 不會回 401,而是**整個掛住不回應**(Cloudflare 前端最後
-      //    回 524 origin timeout),從板子這端看起來就像「ASR 沒反應」。
-      //    參考 cloud/prototype/src/llm/bedrock.js —— 與 ASR 同一把金鑰、同一個標頭。
+      // x-bf-vk 是兩顆 ASR 服務的最大公因數,所以切換 host 時這行不用動:
+      //   AWS(jinsun-asr-openai):x-bf-vk 與 Authorization: Bearer 都吃,錯金鑰乾脆回 401。
+      //   XCC Gateway:**只**認 x-bf-vk。送錯標頭時它不回 401,而是整個掛住不回應
+      //     (Cloudflare 前端最後回 524 origin timeout),從板子這端看起來就像「ASR 沒反應」。
+      //   參考 cloud/prototype/src/llm/bedrock.js —— 與 XCC 的 ASR 同一把金鑰、同一個標頭。
       client_tcp.println("x-bf-vk: " + api_key);
       client_tcp.println("Content-Length: " + String(totalLen));
       client_tcp.println("Content-Type: multipart/form-data; boundary=Taiwan");

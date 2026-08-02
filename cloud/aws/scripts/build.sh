@@ -5,7 +5,7 @@
 # 不重複實作——所以打包時把需要的模組複製進各自的 src/，再安裝依賴、壓 zip。
 # （Lambda 沒有 monorepo workspace 的概念，只能把用到的檔案帶進 bundle。）
 #
-# 用法：bash cloud/aws/scripts/build.sh [voice|speak|progress|data|auth|tts]   省略＝全部
+# 用法：bash cloud/aws/scripts/build.sh [voice|speak|progress|data|auth|tts|asr-openai]   省略＝全部
 # 注意：用 case 而非 declare -A，因為 macOS 內建 bash 是 3.2、沒有關聯陣列。
 set -euo pipefail
 
@@ -19,6 +19,7 @@ needs_for() {
     progress) echo "progress.js db.js" ;;
     speak)    echo "" ;;
     tts)      echo "" ;;
+    asr-openai) echo "" ;;
     data)     echo "db.js" ;;
     auth)     echo "db.js" ;;
     *)        echo "unknown lambda: $1" >&2; exit 1 ;;
@@ -70,4 +71,4 @@ build_one() {
 }
 
 mkdir -p "$OUT"
-if [ $# -gt 0 ]; then build_one "$1"; else for f in voice speak progress data auth tts; do build_one "$f"; done; fi
+if [ $# -gt 0 ]; then build_one "$1"; else for f in voice speak progress data auth tts asr-openai; do build_one "$f"; done; fi

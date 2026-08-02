@@ -150,17 +150,18 @@ export ELDER_DEVICE_PASS='Radio!2026jinsun'
 
 | 資源 | 名稱 |
 |---|---|
-| Lambda | `jinsun-voice`、`jinsun-speak`、`jinsun-progress`、`jinsun-data`＊、`jinsun-auth`＊、`jinsun-tts` |
-| API Gateway | `jinsun-voice-api`（`$default`、`POST /hooks/progress`、`/data/*`＊、`POST /tts`） |
+| Lambda | `jinsun-voice`、`jinsun-speak`、`jinsun-progress`、`jinsun-data`＊、`jinsun-auth`＊、`jinsun-tts`、`jinsun-asr-openai`＊ |
+| API Gateway | `jinsun-voice-api`（`$default`、`POST /hooks/progress`、`/data/*`＊、`POST /tts`、`/v1/audio/transcriptions`＊、`GET /v1/models`＊） |
 | TTS（國語） | `jinsun-tts` + `POST /tts`（Amazon Polly Zhiyu neural）。**兩套環境都打它**——無狀態服務、無資料落地，同 ASR gateway 的處理。台語不在這裡（走外部 ATEN，見 `hardware-integration.md` §1） |
-| ASR | `POST /asr`（走 `$default` → `jinsun-voice`），代理 XCC Gateway 的 Breeze ASR；PAT 在 `jinsun-voice` 的 `XCC_GATEWAY_PAT` 環境變數 |
+| ASR | 兩條並存：①`POST /asr`（走 `$default` → `jinsun-voice`）代理 XCC Gateway 的 Breeze ASR，PAT 在 `jinsun-voice` 的 `XCC_GATEWAY_PAT`；②`POST /v1/audio/transcriptions`＊（`jinsun-asr-openai` → SageMaker `breeze-asr-26`），**自帶 endpoint、不依賴外部 gateway**，見下列 SageMaker |
+| SageMaker＊ | endpoint `breeze-asr-26`（`ml.g4dn.xlarge`，faster-whisper Breeze-ASR-26 fp16）。**GPU 持續計費**，不用時 `cloud/asr-sagemaker/scripts/teardown.sh`。OpenAI 相容門面由 `jinsun-asr-openai` 提供（SigV4 不能直接 curl） |
 | Cognito＊ | User Pool `jinsun-users`、Client `jinsun-apps`、Group `family`/`volunteer`/`worker` |
 | S3＊ | `jinsun-proofs`（結案照片）、`jinsun-{family,volunteer,admin}-web`（三端靜態站） |
 | Step Functions | `JinsunEmergencyLadder`、`JinsunEnrouteBroadcast` |
 | DynamoDB | `jinsun_emergency_sessions`、`jinsun_progress_announced`、`jinsun_downlink`＊（皆有 TTL） |
 | IoT | Thing `JS-0001`／`JS-REAL-0001`，Policy `JinsunDevicePolicy` |
 | Aurora | `jinsun-aurora`（Serverless v2、PG 16.14、0.5–4 ACU、Data API 已開） |
-| IAM Role | `JinsunVoiceLambdaRole`、`JinsunProgressLambdaRole`、`JinsunSpeakLambdaRole`、`JinsunEmergencyLadderRole`、`JinsunDataLambdaRole`＊、`JinsunAuthLambdaRole`＊ |
+| IAM Role | `JinsunVoiceLambdaRole`、`JinsunProgressLambdaRole`、`JinsunSpeakLambdaRole`、`JinsunEmergencyLadderRole`、`JinsunDataLambdaRole`＊、`JinsunAuthLambdaRole`＊、`JinsunAsrOpenaiLambdaRole`＊（只允許 `sagemaker:InvokeEndpoint` 於 `breeze-asr-26` 單一資源） |
 | CloudFront＊ | 三端各一個 distribution（ID 見 §0） |
 
 > 標＊者是本次新增並已部署的資源。

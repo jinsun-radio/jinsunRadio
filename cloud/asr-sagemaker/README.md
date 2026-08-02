@@ -58,16 +58,43 @@ scripts/test.sh samples/*.wav                    # 原生 JSON 介面 + 延遲�
 scripts/test-openai.sh samples/sos.wav verbose_json   # OpenAI multipart 形狀
 ```
 
-### 不是公開 REST API
+### endpoint 本身不是公開 REST API
 
-SageMaker 的傳輸層強制 AWS SigV4 簽章，所以**不能直接 curl**，也不能讓 HUB8735 直連
-（簽章鏈太重，且韌體不該持有 IAM 憑證）。要拿到真正可以 curl 的
-`https://…/v1/audio/transcriptions`，在前面加一層代理：
+SageMaker 的傳輸層強制 AWS SigV4 簽章，所以 endpoint **不能直接 curl**，也不能讓 HUB8735
+直連（簽章鏈太重，且韌體不該持有 IAM 憑證）。要拿到真正可以 curl 的
+`https://…/v1/audio/transcriptions`，前面得有一層「重新簽章、原封轉發」的代理。
 
-- `examples/asr-proxy-route.mjs` — 掛進既有的 Render 語音 server（**建議**，零新增 AWS 資源）
-- `examples/invoke.mjs` — 純 Node SDK 呼叫範例
+三種做法，擇一：
 
-代理層驗自訂裝置金鑰（`x-bf-vk` 或 `Authorization: Bearer`），韌體只需改三行常數。
+| 做法 | 位置 | 適用 |
+|---|---|---|
+| **API Gateway + Lambda**（✅ 已部署） | `cloud/aws/lambda/asr-openai/` | AWS 平行環境；跟 `/voice`、`/tts` 同一個網域 |
+| Render 語音 server 加路由 | `examples/asr-proxy-route.mjs` | 正式環境；零新增 AWS 資源 |
+| 純 SDK 呼叫 | `examples/invoke.mjs` | 後端對後端，不需要 HTTP 門面 |
+
+三者驗證方式一致：自訂金鑰走 `x-bf-vk` 或 `Authorization: Bearer`。
+
+AWS 那條已經上線，部署與網址見
+[`../aws/scripts/deploy-asr-openai.sh`](../aws/scripts/deploy-asr-openai.sh)：
+
+```bash
+bash cloud/aws/scripts/deploy-asr-openai.sh     # 冪等，重跑不會換掉既有金鑰
+```
+
+它掛的是既有的 `jinsun-voice-api`，開三條路由：`POST /v1/audio/transcriptions`、
+`OPTIONS /v1/audio/transcriptions`、`GET /v1/models`。實測可直接餵給官方 OpenAI SDK：
+
+```python
+from openai import OpenAI
+c = OpenAI(base_url="https://<api-id>.execute-api.us-west-2.amazonaws.com/v1", api_key="sk-jinsun-…")
+c.audio.transcriptions.create(model="breeze-asr-26", file=open("samples/sos.wav", "rb")).text
+# → '我跌倒了 站不起來 快來幫我'
+```
+
+⚠️ **音檔上限 4.5MB**（約 2 分鐘 16kHz mono）。這條路比 endpoint 本身的 6MB 更緊：
+Lambda 同步呼叫的 payload 上限是 6MB，而 API Gateway 會把 binary body 做 base64（膨脹 4/3）。
+⚠️ **單次請求上限 30 秒**（API Gateway HTTP API 的整合逾時硬上限，不可調）。
+
 細節見 [`../../docs/requirements/asr-breeze-sagemaker.md`](../../docs/requirements/asr-breeze-sagemaker.md)。
 
 ## 目錄

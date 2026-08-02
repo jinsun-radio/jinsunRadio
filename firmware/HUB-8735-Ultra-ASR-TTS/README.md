@@ -104,7 +104,7 @@ topic、payload、QoS、LWT、`/voice` 的請求與回應逐欄位一致，差�
 
 | 用途 | 服務 |
 |---|---|
-| ASR | `llm-gateway.xcc.tw` `/v1/audio/transcriptions`，model `paulpengtw/faster-whisper-Breeze-ASR-26`（OpenAI/Groq 相容介面）。AWS 版的 Transcribe Lambda 尚未做，所以兩邊都打這裡 |
+| ASR | `…execute-api.us-west-2.amazonaws.com` `/v1/audio/transcriptions`，model `breeze-asr-26` —— 自家的 SageMaker endpoint（faster-whisper Breeze-ASR-26 fp16），由 `jinsun-asr-openai` Lambda 開成 OpenAI 相容介面。部署：`bash cloud/aws/scripts/deploy-asr-openai.sh`。兩套環境共用（無狀態服務，同國語 TTS）。金鑰是 `sk-jinsun-…`，走 `x-bf-vk` 標頭（那支 Lambda 也吃 `Authorization: Bearer`）。**舊的 `llm-gateway.xcc.tw` 保留在 .ino 的註解裡當備援**——SageMaker 是 GPU 機型、會被 teardown 收掉，收掉時取消註解那四行即可切回 |
 | TTS（`lang=taigi`） | `kws.oaselab.org` `/nutntweng/tts/aten/` —— **ATEN 台語模型**（回 JSON 帶 WAV URL，再 GET 串流播放）。端點不吃 voice/lang 參數，只會講台語 |
 | TTS（`lang=mandarin`） | `…execute-api.us-west-2.amazonaws.com` `/tts` —— **Amazon Polly Zhiyu**（`jinsun-tts` Lambda）。韌體帶 `Accept: audio/wav`，回應本身就是 WAV，POST 完直接串流播放（實機驗過）。部署：`bash cloud/aws/scripts/deploy-tts.sh`。兩套環境共用（無狀態服務，同 ASR gateway）。**音量在雲端正規化**（Polly 原始輸出峰值只到 −10 dBFS，聽起來偏小聲；Lambda 拉到 −1 dBFS，+9 dB）——不要改用 `ampVolume` 補，那會連台語一起變大聲 |
 
