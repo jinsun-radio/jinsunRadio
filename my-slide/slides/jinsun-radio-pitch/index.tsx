@@ -17,6 +17,9 @@ import pdBtn from './assets/pd_btn.png';
 import pdBig from './assets/pd_big.png';
 import pdLang from './assets/pd_lang.png';
 import radio from './assets/radio.png';
+import hardwareWiring from './assets/architecture/00-hardware-wiring.svg?url';
+import systemOverview from './assets/architecture/01-system-overview.svg?url';
+import awsDeploymentTopology from './assets/architecture/03-aws-deployment-topology.svg?url';
 
 /* ══════════════════════════════════════════════════════════════════════
    金孫收音機 · 台灣十年提案
@@ -407,18 +410,11 @@ const Cover: Page = () => (
         </p>
 
         <h1
-          style={{
-            margin: '0 0 24px',
-            fontFamily: 'var(--osd-font-display)',
-            fontSize: 'var(--osd-size-hero)',
-            lineHeight: 1.06,
-            fontWeight: 900,
-            letterSpacing: '-.03em',
-          }}
+          style={{ margin: '0 0 24px', fontFamily: 'var(--osd-font-display)', fontSize: '101px', lineHeight: 1.06, fontWeight: 900, letterSpacing: '-.03em' }}
         >
-          獨居長輩出事沒人知，
-          <br />
-          <G>能到場的人卻不夠</G>。
+          「獨居長輩出事，<br />能到場的人卻不夠。」
+
+          <G>{''}</G>{''}
         </h1>
 
         <p
@@ -431,9 +427,9 @@ const Cover: Page = () => (
             maxWidth: 830,
           }}
         >
-          <b style={{ fontWeight: 700 }}>時間銀行</b>＋<b style={{ fontWeight: 700 }}>國台語都能通</b>
-          的金孫收音機——讓長輩的需求只要<b style={{ fontWeight: 700 }}>講一句話</b>
-          ，就能像 Uber 點餐一樣被接住。
+          <b style={{ fontWeight: 700 }}>國台語都能通 x 時間銀行——讓長輩的需求</b>{''}<b style={{ fontWeight: 700 }}>{''}</b>
+          {''}<b style={{ fontWeight: 700 }}>{''}</b>
+          像 Uber 點餐一樣被接住。
         </p>
 
         <div
@@ -1851,6 +1847,39 @@ const Architecture: Page = () => (
 );
 
 /* ══════════════════════════════════════════════════════════════════════
+   EMBEDDED ARCHITECTURE ASSETS — full-canvas pages for Open Slide
+   ══════════════════════════════════════════════════════════════════ */
+
+const DiagramAssetPage = ({ src, alt }: { src: string; alt: string }): Page => (
+  <div
+    style={{
+      ...bleed,
+      background: '#FBF9F6',
+      justifyContent: 'center',
+      alignItems: 'center',
+    }}
+  >
+    <img
+      src={src}
+      alt={alt}
+      style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+    />
+  </div>
+);
+
+const HardwareWiring: Page = () => (
+  <DiagramAssetPage src={hardwareWiring} alt="HUB8735 ultra 與 MAX98357A 硬體接線圖" />
+);
+
+const SystemOverviewDiagram: Page = () => (
+  <DiagramAssetPage src={systemOverview} alt="金孫收音機系統總覽架構圖" />
+);
+
+const AwsDeploymentDiagram: Page = () => (
+  <DiagramAssetPage src={awsDeploymentTopology} alt="金孫收音機 AWS 部署拓撲架構圖" />
+);
+
+/* ══════════════════════════════════════════════════════════════════════
    PAGE 11 — 商業模型 · 客群
    ══════════════════════════════════════════════════════════════════ */
 
@@ -2365,6 +2394,7 @@ export const meta: SlideMeta = {
 export default [
   Cover,
   Scale,
+  Scale,
   Manpower,
   ThreePains,
   FourFixes,
@@ -2373,6 +2403,9 @@ export default [
   EdgeChip,
   GenAi,
   Architecture,
+  HardwareWiring,
+  SystemOverviewDiagram,
+  AwsDeploymentDiagram,
   Segments,
   Cost,
   Vision,
