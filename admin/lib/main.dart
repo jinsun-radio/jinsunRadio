@@ -999,6 +999,9 @@ class _ElderMap extends StatelessWidget {
               options: const MapOptions(
                 initialCenter: LatLng(25.042, 121.535), // 台北市服務區
                 initialZoom: 12.5,
+                // 圖磚載入前（約 1~2 秒）地圖底色改用畫布暖底，而不是 flutter_map 預設的
+                // 深灰——否則初次載入時「派遣監控」下方會閃一塊很突兀的灰色大區塊。
+                backgroundColor: _bg,
                 interactionOptions: InteractionOptions(
                   // 滾輪保留給頁面捲動，地圖縮放用拖曳/雙擊/按鈕
                   flags: InteractiveFlag.all & ~InteractiveFlag.scrollWheelZoom,

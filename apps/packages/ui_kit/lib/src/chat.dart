@@ -163,17 +163,25 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _input.text.trim();
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
-    _input.clear();
-    await widget.backend.sendTaskMessage(widget.taskId,
-        from: widget.myRole, senderId: widget.myId, text: text);
-    if (mounted) setState(() => _sending = false);
-    // 送出後捲到底
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.animateTo(_scroll.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
-      }
-    });
+    try {
+      await widget.backend.sendTaskMessage(widget.taskId,
+          from: widget.myRole, senderId: widget.myId, text: text);
+      // 只在「送出成功」後才清空輸入框——失敗時保留文字，讓使用者直接重送。
+      _input.clear();
+      // 送出後捲到底
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) {
+          _scroll.animateTo(_scroll.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        }
+      });
+    } catch (e) {
+      // 沒有這層 try/catch 的話：送出一失敗，_sending 會永遠卡在 true，
+      // 之後按送出鍵完全沒反應（尤其語音輸入完想送卻送不出去），而且錯誤悄無聲息。
+      _toast('訊息送不出去，請檢查網路後再試一次');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   @override
@@ -363,8 +371,14 @@ class _ChatScreenState extends State<ChatScreen> {
         const SizedBox(width: 8),
         IconButton.filled(
           style: IconButton.styleFrom(backgroundColor: widget.accent),
-          onPressed: _transcribing ? null : _send,
-          icon: const Icon(Icons.send, size: 20),
+          onPressed: (_transcribing || _sending) ? null : _send,
+          icon: _sending
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.send, size: 20),
         ),
       ],
     );
