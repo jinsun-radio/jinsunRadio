@@ -102,3 +102,9 @@ firmware/*/secrets.h
 *.key.pem
 *.public.pem
 cert.arn
+
+# CAD 工具鏈產物（hardware/enclosure）：__pycache__、cadpy editable install 的 egg-info、
+# cad-viewer 的隱藏 GLB 快取（.xxx.step.glb，由 scripts/step 產生）
+**/__pycache__/
+.agents/skills/cad/scripts/packages/cadpy/src/cadpy.egg-info/
+hardware/enclosure/.*.step.glb

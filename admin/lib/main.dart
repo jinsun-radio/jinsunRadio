@@ -1619,13 +1619,17 @@ class _DispatchMonitorState extends State<_DispatchMonitor> {
   /// 手機寬度用的精簡事件列：狀態＋等候＋（標記到達／結案／聯絡）動作；點列開改派面板。
   Widget _compactRow(_MonitorItem it) {
     final (label, sev, sub) = it.status();
-    final t = it.task!;
+    // 這裡的清單是 actionable，收「有派遣單」**或**「還沒開單但狀態非正常」兩種。
+    // 後者正是 SOS／疑似跌倒進來、20 秒升級還沒開單的那一刻——task 是 null。
+    // 用 `it.task!` 會在那一刻整個 _DispatchMonitor 丟例外，release build 直接
+    // 換成灰色 ErrorWidget（社工看到一大塊灰）。與 _card() 一致：可為 null。
+    final t = it.task;
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () => pickVolunteer(context, backend, t.id),
+        onTap: t != null ? () => pickVolunteer(context, backend, t.id) : null,
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -1671,7 +1675,8 @@ class _DispatchMonitorState extends State<_DispatchMonitor> {
                               : _muted)),
                 ),
               ],
-              if (t.kind != DispatchKind.followUp &&
+              if (t != null &&
+                  t.kind != DispatchKind.followUp &&
                   t.status != DispatchStatus.resolved) ...[
                 const SizedBox(height: 10),
                 Wrap(
@@ -1686,6 +1691,19 @@ class _DispatchMonitorState extends State<_DispatchMonitor> {
                       _cardAction('結案', Icons.check_circle_outline,
                           () => _resolve(t.id)),
                     ..._contactActions(it.elder, t),
+                  ],
+                ),
+              ]
+              // 還沒開單的確認窗：沒有 task 就沒有「聯絡家屬」的對話串，但長輩電話
+              // 是社工這一刻最需要的動作，留著。
+              else if (t == null) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _cardAction('聯絡長輩', Icons.call,
+                        () => dialPhone(context, it.elder.phone)),
                   ],
                 ),
               ],

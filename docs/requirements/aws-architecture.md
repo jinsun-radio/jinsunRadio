@@ -3,6 +3,8 @@
 > 對象：使用主辦方提供之 AWS 環境（含 Amazon Bedrock、SageMaker AI、Kiro）。
 > 本文是**規劃書**，不是已完成的實作；`docs/architecture.md` 描述的是現況（Supabase + Render + 公共 MQTT broker）。
 > 兩者的服務對應在 §3；落地順序在 §7。
+> 架構圖：[`../assets/aws-architecture.drawio`](../assets/aws-architecture.drawio)；
+> 評審備詢問答：[`aws-architecture-qa.md`](aws-architecture-qa.md)。
 
 ---
 
@@ -218,10 +220,10 @@ flowchart TB
   ADM --> APIGW
   ELD -->|"POST /asr → POST /voice<br/>＋ /data/* 輪詢"| APIGW
 
-  SGM -.->|"尚未接線<br/>需 SigV4 proxy"| MCU
+  SGM -->|"OpenAI 相容門面<br/>jinsun-asr-openai（SigV4 重簽）"| MCU
 
   classDef notwired stroke-dasharray: 5 5
-  class SGM,CAM notwired
+  class CAM notwired
 ```
 
 ### 用到哪些 AWS 服務、分別用在哪
@@ -229,19 +231,19 @@ flowchart TB
 | AWS 服務 | 實際資源 | 用在什麼地方 |
 |---|---|---|
 | **API Gateway**（HTTP API） | `jinsun-voice-api` / `yr0ep335el` | 唯一的 HTTPS 入口。8 條路由：`$default`→語音（含 `POST /voice`、`POST /asr`、`GET /health`、`GET /commands`）、`POST /hooks/progress`→進度、`/data/{version,snapshot,mutate,timebank}`→資料 API（掛 JWT authorizer）、`POST /tts`＋`OPTIONS /tts`→國語 TTS（**無 authorizer**，同 `/asr` 的理由）。`/asr` 沒有獨立路由也**沒有 JWT authorizer**——它落在 `$default` 上，長輩端是裝置身分，不該為了轉一句逐字稿去換 token |
-| **Lambda** ×6 | `jinsun-voice` `jinsun-data` `jinsun-progress` `jinsun-speak` `jinsun-auth` `jinsun-tts` | 全部商業邏輯。`voice` 跑六個 Agent；`data` 是三端資料 API＋角色授權；`progress` 播報去重；`speak` 只做「publish 一句話到 IoT」；`auth` 是 Cognito 觸發器；`tts` 是國語語音合成（Polly Zhiyu，唯一一支兩套環境共用的） |
+| **Lambda** ×7 | `jinsun-voice` `jinsun-data` `jinsun-progress` `jinsun-speak` `jinsun-auth` `jinsun-tts` `jinsun-asr-openai` | 全部商業邏輯。`voice` 跑六個 Agent；`data` 是三端資料 API＋角色授權；`progress` 播報去重；`speak` 只做「publish 一句話到 IoT」；`auth` 是 Cognito 觸發器；`tts` 是國語語音合成（Polly Zhiyu）；`asr-openai` 是 SageMaker 的 OpenAI 相容門面。後兩支是唯一兩套環境共用的（無狀態、無資料落地） |
 | **Step Functions** ×2 | `JinsunEmergencyLadder`、`JinsunEnrouteBroadcast` | **黃金 20 秒鏈路**。取代原本行程內的 `setTimeout`／`setInterval`——行程重啟也不會漏升級。用絕對時間戳而非相對 `Wait`（相對會累積開銷，實測超窗到 21.55s） |
 | **IoT Core** | Thing `JS-0001`／`JS-REAL-0001`、policy `JinsunDevicePolicy` | 下行指令 push（`jinsun/{serial}/cmd`）、裝置上下線 LWT。X.509 雙向 TLS，取代正式環境那顆無認證的公共 broker |
 | **Aurora Serverless v2** | `jinsun-aurora`、PG 16.14、Data API、0.5–4 ACU | 唯一的關聯式資料庫，與正式環境 Supabase **完全斷開**。走 Data API 所以 Lambda 不必進 VPC。最小容量刻意設 0.5 而非 0（從零擴容約 15 秒，會吃掉黃金窗） |
 | **DynamoDB** ×3 | `jinsun_emergency_sessions`、`jinsun_progress_announced`、`jinsun_downlink` | 三張都有 TTL。第一張存急救 session（誰在等回應、Step Functions execution ARN），第二張做播報去重（同一張單不重複念），第三張是**下行扇出佇列**——`jinsun-speak`／`jinsun-progress` publish 到 IoT 的同時複製一份，供瀏覽器版模擬器（`admin/?sim=1`）用 `GET /commands` 長輪詢領取（真裝置不走這條，它收 MQTT push） |
 | **Cognito** | User Pool `jinsun-users`、Client `jinsun-apps`、3 個 Group | 三端身分與角色。**角色只認 `cognito:groups`**，不認 `custom:role`（後者使用者自己就能改）。取代 Supabase Auth + RLS。長輩端多一個**裝置帳號** `device-js-0001@jinsun.local`（group `family`，只綁 elder-1）——長輩端沒有 UI，不可能叫長輩登入，帳密在 build 時注入、開網頁自動登入 |
 | **Bedrock** | `us.anthropic.claude-sonnet-4-6`、`claude-haiku-4-5` | 六個 Agent 的大腦（意圖分類、需求解析、陪伴對話）。此帳號只授權這兩顆，裸 model id 一律 `ResourceNotFound`，必須帶 `us.` 前綴 |
-| **SageMaker** | Endpoint `breeze-asr-26`、`ml.g4dn.xlarge` | 台語 ASR（Transcribe 無台語）。**endpoint 是 InService 的，但還沒接進鏈路**——SageMaker 強制 SigV4 簽章，HUB8735 做不到，要一層 proxy（`cloud/asr-sagemaker/examples/asr-proxy-route.mjs` 是範例） |
+| **SageMaker** | Endpoint `breeze-asr-26`、`ml.g4dn.xlarge` | 台語／國語 ASR（Transcribe 無台語）。✅ **已接線**（commit `f5cba93`）：SageMaker 強制 SigV4 簽章、HUB8735 做不到，改由 `jinsun-asr-openai` Lambda 開成 OpenAI 相容的 `POST /v1/audio/transcriptions`，韌體 `api_server` 已指向它、組請求的程式碼一行未動。XCC Gateway 降為註解掉的備援 |
 | **S3** ×5 | `jinsun-proofs`、`jinsun-{family,volunteer,admin,elder}-web` | 結案照片（presigned PUT，志工直傳不經 Lambda）＋四端 Flutter Web 靜態站 |
 | **CloudFront** ×4 | `E2A1BW0EZXSZWA`／`E1SO2GTWWKONH8`／`E4QI5MMFZRZ5A`／`E1QH4VWLX0WN30`（elder） | 四端 HTTPS。**必須用 CloudFront 網址**，S3 網站端點只有 HTTP，瀏覽器在非 HTTPS 下不給定位權限，志工 GPS 上報會整條失效；長輩端更嚴重——麥克風同樣要 HTTPS，走 S3 端點的話大錄音按鈕整個是啞的 |
 | **Secrets Manager** | `rds!cluster-b4211a31-…` | Aurora 主密碼，由 RDS 託管（`--manage-master-user-password`），無人經手 |
 | **IAM** ×6 role | `JinsunVoice/Progress/Speak/Data/Auth LambdaRole`、`JinsunEmergencyLadderRole` | 每支 Lambda 一個最小權限 role |
-| **CloudWatch Logs** | `/aws/lambda/jinsun-*` ×5 | 唯一的除錯入口。⚠️ **retention 未設＝永久保留**，賽後清理要記得 |
+| **CloudWatch Logs** | `/aws/lambda/jinsun-*` ×7 | 唯一的除錯入口。⚠️ **retention 未設＝永久保留**，賽後清理要記得 |
 
 ### 2.1.1 四條主要流程（服務之間怎麼走）
 
@@ -423,7 +425,7 @@ sequenceDiagram
 |---|---|
 | Transcribe（國語 ASR） | **沒用**。國語 ASR 走外部 XCC Gateway：韌體直接打，長輩端網頁版則經 `jinsun-voice` 的 `POST /asr` 代理（金鑰不進前端封包）。刻意不換 Transcribe——它沒有台語，而這條是長輩唯一的輸入方式 |
 | Polly（國語 TTS） | ✅ **已接**（`jinsun-tts` Lambda，`POST /tts`，Zhiyu neural → WAV）。台語仍走外部 `kws.oaselab.org`（ATEN 是台語模型，Polly 沒有閩南語音色），裝置端依 `speak.lang` 分流 |
-| SageMaker 台語 ASR | endpoint 已 InService，**但未接線**（缺 SigV4 proxy） |
+| SageMaker 台語 ASR | ✅ **已接線**（`jinsun-asr-openai` 門面 + 韌體已切換），本列保留供對照 |
 | SageMaker 跌倒模型訓練 → OTA | **沒做**。跌倒視覺推論本身尚未實作 |
 | AppSync GraphQL Subscription | **沒建**。改用 `/data/version` 變更指紋輪詢（每 3 秒），取捨理由見 §4.4 |
 | EventBridge | **沒建**。播報改由 Step Functions 迴圈驅動 |
