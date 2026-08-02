@@ -35,17 +35,22 @@ cloud/aws/
 │   │   ├── index.mjs   /data/version（變更指紋）、/data/snapshot、/data/mutate
 │   │   ├── authz.mjs   角色授權 —— 取代 RLS 的那一層（純函式，有測試）
 │   │   └── ops.mjs     具名寫入操作，可寫欄位寫死
-│   └── auth/       Cognito 觸發器：PreSignUp 自動確認、PostConfirmation 加 group＋寫 profiles
+│   ├── auth/       Cognito 觸發器：PreSignUp 自動確認、PostConfirmation 加 group＋寫 profiles
+│   └── asr-openai/ POST /v1/audio/transcriptions —— SageMaker breeze-asr-26 的 OpenAI 相容門面。
+│                   endpoint 本身已是 OpenAI 形狀（cloud/asr-sagemaker/src/inference.py），
+│                   這支只做「驗金鑰 → 還原 base64 body → 換 octet-stream 轉發」，不解析 payload
 ├── stepfunctions/
 │   ├── emergency-ladder.asl.json     20 秒逾時階梯（絕對時間戳）
 │   └── enroute-broadcast.asl.json    路上每 10 分鐘（取代 setInterval）
 ├── iot/device-policy.json            裝置只能碰自己的 topic
 └── scripts/
-    ├── build.sh                      打包六支 Lambda
+    ├── build.sh                      打包七支 Lambda
     ├── set-lambda-env.mjs            把 .env 裡的機密併進 Lambda 環境變數
     ├── setup-cognito.sh              User Pool + 三個 Group + App Client + 觸發器
     ├── deploy-data.sh                jinsun-data + API 路由 + JWT authorizer + 照片 bucket
-    └── deploy-tts.sh                 jinsun-tts + POST /tts 路由 + Polly 權限
+    ├── deploy-tts.sh                 jinsun-tts + POST /tts 路由 + Polly 權限
+    └── deploy-asr-openai.sh          jinsun-asr-openai + /v1/audio/transcriptions 路由
+                                      （把 SageMaker breeze-asr-26 開成 OpenAI 相容 REST API）
 ```
 
 **Lambda handler 不重複實作商業邏輯**——直接 import `cloud/prototype/src` 的

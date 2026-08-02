@@ -1,0 +1,8 @@
+{
+  "name": "jinsun-asr-openai",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-sagemaker-runtime": "^3.1101.0"
+  }
+}

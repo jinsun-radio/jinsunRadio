@@ -271,8 +271,9 @@ BACKEND_AWS 1   BASE_URL=https://yr0ep335el.execute-api.us-west-2.amazonaws.com
    8883 才是這塊板子唯一可行的路。
 
 **兩套環境不共用資料庫**，切過去之後事件只會出現在 AWS 那三端網址上。接手前先讀
-[`aws-handoff.md`](aws-handoff.md)。ASR／TTS 兩邊共用同一組雲端服務（ASR 走 XCC gateway；
-TTS 台語走 ATEN、國語走 `jinsun-tts` Lambda——後者雖然跑在 AWS 上，但兩套環境都打它，
+[`aws-handoff.md`](aws-handoff.md)。ASR／TTS 兩邊共用同一組雲端服務（ASR 走 `jinsun-asr-openai`
+Lambda → SageMaker `breeze-asr-26`，舊的 XCC gateway 保留在 .ino 註解裡當備援；
+TTS 台語走 ATEN、國語走 `jinsun-tts` Lambda——這些雖然跑在 AWS 上，但兩套環境都打它，
 理由見 §1），所以只有上面這兩個端點會變。
 
 ## 交接清單（韌體端 TODO）
